@@ -18,7 +18,12 @@ import {
 import { COMPANY_SOURCES } from "../../domain/company";
 import { DOCUMENT_PROCESSING_STATUSES, DOCUMENT_TYPES, STORAGE_PROVIDERS } from "../../domain/document";
 import { FEEDBACK_TYPES, INTERVIEW_STATUSES, INTERVIEW_TYPES } from "../../domain/interview";
-import { LEGACY_ENTITY_TYPES, LEGACY_SYSTEMS } from "../../domain/legacy";
+import {
+  ADV_CORE_SYNC_STATUSES,
+  ADV_CORE_SYNC_TRIGGERS,
+  LEGACY_ENTITY_TYPES,
+  LEGACY_SYSTEMS,
+} from "../../domain/legacy";
 import {
   MATCHING_EVIDENCE_STATUSES,
   MATCHING_OVERALL_STATUSES,
@@ -67,6 +72,8 @@ export const documentProcessingStatusEnum = pgEnum("document_processing_status",
 
 export const legacySystemEnum = pgEnum("legacy_system", LEGACY_SYSTEMS);
 export const legacyEntityTypeEnum = pgEnum("legacy_entity_type", LEGACY_ENTITY_TYPES);
+export const advCoreSyncStatusEnum = pgEnum("adv_core_sync_status", ADV_CORE_SYNC_STATUSES);
+export const advCoreSyncTriggerEnum = pgEnum("adv_core_sync_trigger", ADV_CORE_SYNC_TRIGGERS);
 
 export const matchingRequirementCodeEnum = pgEnum("matching_requirement_code", MATCHING_REQUIREMENT_CODES);
 export const matchingEvidenceStatusEnum = pgEnum("matching_evidence_status", MATCHING_EVIDENCE_STATUSES);

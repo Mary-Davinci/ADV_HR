@@ -31,11 +31,12 @@ npm run db:studio    # Drizzle Studio
 
 ## Migration
 
-| File                         | Contenuto                                                                     |
-| ---------------------------- | ----------------------------------------------------------------------------- |
-| `0000_initial_schema.sql`    | `CREATE EXTENSION vector`, enum, 38 tabelle, FK, indici, CHECK                |
-| `0001_reference_data.sql`    | ruoli e stage iniziali della pipeline (idempotente, `ON CONFLICT DO NOTHING`) |
-| `0002_search_extensions.sql` | `CREATE EXTENSION unaccent` (ricerca insensibile agli accenti)                |
+| File                         | Contenuto                                                                         |
+| ---------------------------- | --------------------------------------------------------------------------------- |
+| `0000_initial_schema.sql`    | `CREATE EXTENSION vector`, enum, 38 tabelle, FK, indici, CHECK                    |
+| `0001_reference_data.sql`    | ruoli e stage iniziali della pipeline (idempotente, `ON CONFLICT DO NOTHING`)     |
+| `0002_search_extensions.sql` | `CREATE EXTENSION unaccent` (ricerca insensibile agli accenti)                    |
+| `0003_adv_core_sync.sql`     | tabelle `adv_core_records`, `adv_core_sync_runs` per la sincronizzazione ADV CORE |
 
 Nessuna migration distruttiva. In produzione le estensioni `vector` e `unaccent` devono
 essere abilitate da un utente con privilegi adeguati (DBA). Nuovi valori di enum richiedono
@@ -61,7 +62,10 @@ normalizzato), `candidate_languages`, `candidate_certifications`, `candidate_dri
 **Operatività**: `activities` (timeline + ultimo contatto), `audit_logs`, `tasks`,
 `documents` (solo metadati + stato elaborazione), `talent_pools`, `talent_pool_candidates`.
 
-**Predisposte, non usate in V1**: `legacy_mappings`, `candidate_embeddings`,
+**Sincronizzazione ADV CORE** (docs/ADV_CORE_BRIDGE.md): `legacy_mappings`, `adv_core_records`,
+`adv_core_sync_runs`.
+
+**Predisposte, non usate in V1**: `candidate_embeddings`,
 `job_description_embeddings`, `matching_runs`, `matching_results`, `matching_evidence`.
 
 ## Indici principali

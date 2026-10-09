@@ -18,7 +18,8 @@
     "db:migrate": "tsx --env-file=.env.local src/db/migrate.ts",
     "db:seed": "tsx --env-file=.env.local src/db/seed/run.ts",
     "db:reset": "tsx --env-file=.env.local src/db/reset.ts",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "sync:adv-core": "tsx --env-file=.env.local src/repositories/adv-core/run-sync.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
