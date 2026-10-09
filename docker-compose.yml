@@ -1,0 +1,25 @@
+# Database di sviluppo ADV_HR (PostgreSQL 17 + pgvector).
+# Porta host 5433 per non collidere con altri Postgres locali sulla 5432.
+# Credenziali SOLO di sviluppo locale: in altri ambienti usare secret dedicati.
+name: adv-hr
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: adv_hr
+      POSTGRES_USER: adv_hr
+      POSTGRES_PASSWORD: adv_hr_dev
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - adv-hr-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U adv_hr -d adv_hr"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  adv-hr-pgdata:
