@@ -5,8 +5,10 @@ import { z } from "zod";
 
 import { EmptyState } from "@/components/common/empty-state";
 import { PageHeader } from "@/components/common/page-header";
+import { Pagination } from "@/components/common/pagination";
 import { UrlFilterBar } from "@/components/common/url-filter-bar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ITALIAN_REGIONS } from "@/config/labels";
 import { CompanyFormButton } from "@/features/companies/components/company-forms";
 import { can } from "@/lib/auth/permissions";
 import { requirePermission } from "@/lib/auth/session";
@@ -20,19 +22,32 @@ const filtersSchema = z.object({
   q: z.preprocess(first, z.string().trim().max(100).optional()).catch(undefined),
   region: z.preprocess(first, z.string().trim().max(60).optional()).catch(undefined),
   open: z.preprocess(first, z.enum(["yes"]).optional()).catch(undefined),
+  page: z.preprocess(first, z.coerce.number().int().min(1).max(10_000).optional()).catch(undefined),
 });
+
+const PAGE_SIZE = 50;
+
+function companiesHref({ page, ...filters }: z.infer<typeof filtersSchema>) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) if (value) params.set(key, value);
+  if (page && page > 1) params.set("page", String(page));
+  const query = params.toString();
+  return query ? `/companies?${query}` : "/companies";
+}
 
 export default async function CompaniesPage({ searchParams }: PageProps<"/companies">) {
   const user = await requirePermission("company.read");
   const filters = filtersSchema.parse(await searchParams);
+  const page = filters.page ?? 1;
   const services = await getServices();
   const result = await services.companies.list({
     text: filters.q,
     region: filters.region,
     withOpenSelections: filters.open === "yes",
-    limit: 100,
+    limit: PAGE_SIZE,
+    offset: (page - 1) * PAGE_SIZE,
   });
-  const regions = ["Lombardia", "Emilia-Romagna", "Piemonte", "Veneto", "Liguria", "Toscana", "Lazio", "Campania"];
+  const filtered = Boolean(filters.q || filters.region || filters.open);
 
   return (
     <div className="space-y-6">
@@ -49,7 +64,7 @@ export default async function CompaniesPage({ searchParams }: PageProps<"/compan
             param: "region",
             label: "Filtra per regione",
             allLabel: "Tutte le regioni",
-            options: regions.map((region) => ({ value: region, label: region })),
+            options: ITALIAN_REGIONS.map((region) => ({ value: region, label: region })),
           },
           {
             param: "open",
@@ -60,8 +75,13 @@ export default async function CompaniesPage({ searchParams }: PageProps<"/compan
         ]}
       />
 
+      <p className="text-sm text-muted-foreground" aria-live="polite">
+        {result.total === 1 ? "1 azienda" : `${result.total} aziende`}
+        {filtered && " corrispondenti ai filtri"}
+      </p>
+
       {result.items.length === 0 ? (
-        filters.q || filters.region || filters.open ? (
+        filtered ? (
           <EmptyState icon={SearchX} title="Nessuna azienda trovata" description="Modifica la ricerca o i filtri." />
         ) : (
           <EmptyState icon={Building2} title="Nessuna azienda" description="Crea la prima azienda cliente." />
@@ -109,6 +129,12 @@ export default async function CompaniesPage({ searchParams }: PageProps<"/compan
           </Table>
         </div>
       )}
+      <Pagination
+        page={page}
+        pageSize={PAGE_SIZE}
+        total={result.total}
+        hrefFor={(target) => companiesHref({ ...filters, page: target })}
+      />
     </div>
   );
 }

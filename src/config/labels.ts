@@ -280,6 +280,30 @@ export function labelOf<T extends string>(
   return labels[value] ?? fallback;
 }
 
+/** Regioni italiane, con la grafia usata da ADV Core (filtri per regione). */
+export const ITALIAN_REGIONS = [
+  "Abruzzo",
+  "Basilicata",
+  "Calabria",
+  "Campania",
+  "Emilia-Romagna",
+  "Friuli-Venezia Giulia",
+  "Lazio",
+  "Liguria",
+  "Lombardia",
+  "Marche",
+  "Molise",
+  "Piemonte",
+  "Puglia",
+  "Sardegna",
+  "Sicilia",
+  "Toscana",
+  "Trentino-Alto Adige",
+  "Umbria",
+  "Valle d'Aosta",
+  "Veneto",
+] as const;
+
 /** Opzioni per select a partire da una mappa di label (ordine della mappa). */
 export function optionsOf<T extends string>(labels: Record<T, string>): Array<{ value: T; label: string }> {
   return (Object.entries(labels) as Array<[T, string]>).map(([value, label]) => ({ value, label }));
