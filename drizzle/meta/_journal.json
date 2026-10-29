@@ -64,6 +64,13 @@
       "when": 1792573396359,
       "tag": "0008_storage_provider_s3",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793270861567,
+      "tag": "0009_candidate_origin_orientation",
+      "breakpoints": true
     }
   ]
 }

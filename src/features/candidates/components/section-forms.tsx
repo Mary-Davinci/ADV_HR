@@ -5,11 +5,20 @@ import { useState } from "react";
 import { useForm, type FieldValues } from "react-hook-form";
 import type { z } from "zod";
 
-import { FieldRow, SelectField, TextareaField, TextField, TriStateField } from "@/components/forms/fields";
+import {
+  CheckboxGroupField,
+  FieldRow,
+  SelectField,
+  TextareaField,
+  TextField,
+  TriStateField,
+} from "@/components/forms/fields";
 import { FormDialog } from "@/components/forms/form-dialog";
 import { Button } from "@/components/ui/button";
 import {
+  ACTIVE_POLICY_PROGRAM_LABELS,
   AVAILABILITY_LABELS,
+  CANDIDATE_ORIGIN_LABELS,
   EMPLOYMENT_STATUS_LABELS,
   optionsOf,
   PROTECTED_CATEGORY_LABELS,
@@ -22,9 +31,14 @@ import type { ActionResult } from "@/lib/action-result";
 import { actionResolver } from "@/lib/forms";
 import { toFormValue } from "@/lib/zod-helpers";
 
-import { identitySchema, preferencesSchema, profileSchema } from "../schemas/profile-schemas";
-import { updateIdentityAction, updatePreferencesAction, updateProfileAction } from "../server/actions";
-import type { IdentityFormInput, PreferencesFormInput, ProfileFormInput } from "./form-types";
+import { identitySchema, preferencesSchema, profileSchema, trackingSchema } from "../schemas/profile-schemas";
+import {
+  updateIdentityAction,
+  updatePreferencesAction,
+  updateProfileAction,
+  updateTrackingAction,
+} from "../server/actions";
+import type { IdentityFormInput, PreferencesFormInput, ProfileFormInput, TrackingFormInput } from "./form-types";
 import { IdentityFields } from "./identity-fields";
 
 interface EditSectionProps<TSchema extends z.ZodType<unknown, FieldValues>> {
@@ -98,6 +112,45 @@ export function EditIdentityButton({ candidate }: { candidate: Candidate }) {
       action={updateIdentityAction}
     >
       <IdentityFields />
+    </EditSectionButton>
+  );
+}
+
+export function EditTrackingButton({ candidate }: { candidate: Candidate }) {
+  const initialValues: TrackingFormInput = {
+    origin: candidate.origin,
+    orientationCompletedOn: toFormValue(candidate.orientationCompletedOn),
+    activatablePolicies: candidate.activatablePolicies,
+  };
+  return (
+    <EditSectionButton
+      candidateId={candidate.id}
+      title="Modifica percorso"
+      description="Origine del candidato, orientamento e politiche attive che si possono attivare."
+      schema={trackingSchema}
+      initialValues={initialValues}
+      action={updateTrackingAction}
+    >
+      <FieldRow>
+        <SelectField<TrackingFormInput>
+          name="origin"
+          label="Origine"
+          required
+          options={optionsOf(CANDIDATE_ORIGIN_LABELS)}
+        />
+        <TextField<TrackingFormInput>
+          name="orientationCompletedOn"
+          label="Orientamento completato il"
+          description="Lascia vuoto se non l'ha ancora completato."
+          type="date"
+        />
+      </FieldRow>
+      <CheckboxGroupField<TrackingFormInput>
+        name="activatablePolicies"
+        label="Politiche attive attivabili"
+        description="Per i candidati arrivati da Indeed, LinkedIn o inseriti a mano: puoi indicarne più di una."
+        options={optionsOf(ACTIVE_POLICY_PROGRAM_LABELS)}
+      />
     </EditSectionButton>
   );
 }

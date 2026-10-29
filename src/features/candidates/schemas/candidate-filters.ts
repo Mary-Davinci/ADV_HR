@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import {
   ACTIVE_POLICY_PROGRAMS,
+  CANDIDATE_ORIGINS,
   DRIVING_LICENSE_CATEGORIES,
   EMPLOYMENT_STATUSES,
   REVIEW_STAGE_CODES,
@@ -30,8 +31,9 @@ export const SORT_LABELS: Record<CandidateSort, string> = {
 
 export const DEFAULT_SORT: CandidateSort = "updatedAt_desc";
 
-/** Valore del filtro "politica attiva" che accetta qualsiasi programma. */
+/** Valori del filtro "politica attiva": almeno una (qualsiasi programma) o nessuna. */
 export const ANY_ACTIVE_POLICY = "ANY";
+export const NO_ACTIVE_POLICY = "NONE";
 
 /** Gruppo di stage selezionabile come filtro unico. */
 export const PENDING_REVIEW_FILTER = "PENDING_REVIEW";
@@ -65,8 +67,10 @@ export const candidateFiltersSchema = z.object({
   workTime: oneOf(WORK_TIMES),
   license: oneOf(DRIVING_LICENSE_CATEGORIES),
   minExp: z.preprocess(firstValue, z.coerce.number().int().min(1).max(40).optional()).catch(undefined),
-  policy: oneOf([ANY_ACTIVE_POLICY, ...ACTIVE_POLICY_PROGRAMS] as const),
+  policy: oneOf([ANY_ACTIVE_POLICY, NO_ACTIVE_POLICY, ...ACTIVE_POLICY_PROGRAMS] as const),
   policyYear: z.preprocess(firstValue, z.coerce.number().int().min(2000).max(2100).optional()).catch(undefined),
+  orientation: yesNo,
+  origin: oneOf(CANDIDATE_ORIGINS),
   stage: z
     .preprocess(
       firstValue,
@@ -99,6 +103,8 @@ export const ADVANCED_FILTER_KEYS = [
   "minExp",
   "policy",
   "policyYear",
+  "orientation",
+  "origin",
 ] as const satisfies ReadonlyArray<keyof CandidateFilters>;
 
 export function parseCandidateFilters(searchParams: Record<string, string | string[] | undefined>): CandidateFilters {
@@ -135,6 +141,8 @@ export function toCandidateSearchQuery(filters: CandidateFilters, now: Date): Ca
     minExperienceMonths: filters.minExp ? filters.minExp * 12 : undefined,
     activePolicy: filters.policy,
     activePolicyYear: filters.policyYear,
+    orientationCompleted: filters.orientation === undefined ? undefined : filters.orientation === "yes",
+    origin: filters.origin,
     stageCodes: filters.stage
       ? filters.stage === PENDING_REVIEW_FILTER
         ? [...REVIEW_STAGE_CODES]

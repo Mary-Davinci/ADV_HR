@@ -426,7 +426,7 @@ export async function runAdvCoreSync(options: SyncOptions): Promise<SyncSummary>
           const grouped = splitFields(incoming);
           const [inserted] = await tx
             .insert(candidates)
-            .values(grouped.candidate as typeof candidates.$inferInsert)
+            .values({ ...(grouped.candidate as typeof candidates.$inferInsert), origin: "ADV_CORE" })
             .returning({ id: candidates.id });
           candidateId = inserted!.id;
           await tx.insert(candidateProfiles).values({ candidateId, ...grouped.profile });

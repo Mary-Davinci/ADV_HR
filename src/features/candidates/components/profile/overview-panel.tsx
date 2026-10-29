@@ -1,9 +1,11 @@
-import { BriefcaseBusiness, CalendarClock, IdCard, MessageSquareText, UserRound } from "lucide-react";
+import { BriefcaseBusiness, CalendarClock, IdCard, MessageSquareText, Route, UserRound } from "lucide-react";
 import Link from "next/link";
 
 import { DetailField, DetailList, DetailSection } from "@/components/common/detail-section";
 import {
+  ACTIVE_POLICY_PROGRAM_LABELS,
   AVAILABILITY_LABELS,
+  CANDIDATE_ORIGIN_LABELS,
   EMPLOYMENT_STATUS_LABELS,
   FEEDBACK_TYPE_LABELS,
   GENDER_LABELS,
@@ -15,12 +17,14 @@ import { getTotalExperienceMonths } from "@/domain";
 import { formatDate, formatDateTime, formatLongDate, formatMonths, formatTime, getAge } from "@/lib/format";
 import type { CandidateProfileView } from "@/services/candidate-service";
 
+import { EditTrackingButton } from "../section-forms";
+
 /**
  * Panoramica. Ordine informativo concordato con HR:
  * nome → data/ora colloquio → CF → nascita → residenza → L.68/99 →
  * esperienza → disponibilità → feedback recruiter. Sezioni verticali.
  */
-export function OverviewPanel({ profile }: { profile: CandidateProfileView }) {
+export function OverviewPanel({ profile, canEdit }: { profile: CandidateProfileView; canEdit: boolean }) {
   const { candidate } = profile;
   const next = profile.nextInterview;
   const age = getAge(candidate.birthDate);
@@ -168,6 +172,45 @@ export function OverviewPanel({ profile }: { profile: CandidateProfileView }) {
                     </span>
                   ))}
                 </span>
+              </DetailField>
+            )}
+          </dl>
+        </DetailSection>
+
+        <DetailSection
+          title="Percorso e politiche attive"
+          icon={Route}
+          action={canEdit ? <EditTrackingButton candidate={candidate} /> : undefined}
+        >
+          <dl className="grid gap-4">
+            <DetailField label="Origine">{CANDIDATE_ORIGIN_LABELS[candidate.origin]}</DetailField>
+            <DetailField label="Orientamento">
+              {candidate.orientationCompletedOn ? (
+                <span className="text-emerald-700 dark:text-emerald-400">
+                  Completato il {formatDate(candidate.orientationCompletedOn)}
+                </span>
+              ) : (
+                "Non completato"
+              )}
+            </DetailField>
+            <DetailField label="Politiche attive sottoscritte">
+              {profile.activePolicies.length > 0
+                ? profile.activePolicies
+                    .map((policy) => `${ACTIVE_POLICY_PROGRAM_LABELS[policy.programType]} ${policy.referenceYear}`)
+                    .join(", ")
+                : "Nessuna"}
+            </DetailField>
+            {(candidate.origin !== "ADV_CORE" || candidate.activatablePolicies.length > 0) && (
+              <DetailField label="Politiche attivabili">
+                {candidate.activatablePolicies.length > 0 && (
+                  <span className="flex flex-wrap gap-1.5">
+                    {candidate.activatablePolicies.map((program) => (
+                      <span key={program} className="rounded-md border bg-muted/50 px-2 py-0.5 text-xs">
+                        {ACTIVE_POLICY_PROGRAM_LABELS[program]}
+                      </span>
+                    ))}
+                  </span>
+                )}
               </DetailField>
             )}
           </dl>

@@ -9,9 +9,11 @@ import type {
   CandidateExperience,
   CandidateInterest,
   CandidateLanguage,
+  CandidateOrigin,
   CandidatePreferences,
   CandidateProfile,
   CandidateSkill,
+  CandidateTrackingInput,
   DrivingLicenseCategory,
   EducationLevel,
   EmploymentStatus,
@@ -52,10 +54,16 @@ export interface CandidateSearchQuery extends PageRequest {
   drivingLicense?: DrivingLicenseCategory;
   language?: string;
   minExperienceMonths?: number;
-  /** Partecipa a una politica attiva: un programma preciso o `"ANY"` (qualsiasi). */
-  activePolicy?: ActivePolicyProgram | "ANY";
+  /**
+   * Politica attiva sottoscritta: un programma preciso, `"ANY"` (almeno una) o
+   * `"NONE"` (nessuna).
+   */
+  activePolicy?: ActivePolicyProgram | "ANY" | "NONE";
   /** Anno di riferimento della politica attiva (insieme al programma, se indicato). */
   activePolicyYear?: number;
+  /** `true` = ha completato il percorso di orientamento. */
+  orientationCompleted?: boolean;
+  origin?: CandidateOrigin;
   /** Stage della candidatura più recente. */
   stageCodes?: string[];
   recruiterId?: EntityId;
@@ -162,6 +170,8 @@ export interface CandidateRepository {
   updateIdentity(id: EntityId, input: CandidateIdentityInput): Promise<Candidate>;
   upsertProfile(id: EntityId, input: CandidateProfileInput, reviewedAt: Date): Promise<CandidateProfile>;
   upsertPreferences(id: EntityId, input: CandidatePreferencesInput): Promise<CandidatePreferences>;
+  /** Origine, orientamento e politiche attivabili. */
+  updateTracking(id: EntityId, input: CandidateTrackingInput): Promise<void>;
   /** Aggiorna `last_reviewed_at` e `updated_at` del candidato (modifica rilevante). */
   markReviewed(id: EntityId, at: Date): Promise<void>;
 
@@ -233,6 +243,12 @@ export interface PositionMatch {
   employmentStatus: string | null;
   sameProvince: boolean;
   sameRegion: boolean;
+  /** Regione di residenza, per il filtro della lista. */
+  region: string | null;
+  /** Ha almeno una politica attiva sottoscritta. */
+  hasActivePolicy: boolean;
+  orientationCompleted: boolean;
+  origin: CandidateOrigin;
   hasCv: boolean;
   hasReadableCv: boolean;
   /** CV più recente (anche se scansionato), per aprirlo dalla lista. */

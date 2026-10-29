@@ -277,6 +277,72 @@ export function CheckboxField<T extends FieldValues>({
   );
 }
 
+/** Scelta multipla: il valore del campo è l'array dei valori spuntati. */
+export function CheckboxGroupField<T extends FieldValues>({
+  name,
+  label,
+  description,
+  className,
+  disabled,
+  options,
+}: Omit<BaseProps<T>, "required"> & { options: Array<{ value: string; label: string }> }) {
+  const { control } = useFormContext<T>();
+  const ids = useFieldIds();
+  return (
+    <Controller
+      control={control}
+      name={name}
+      render={({ field, fieldState, formState }) => {
+        const selected: string[] = Array.isArray(field.value) ? field.value : [];
+        const error = fieldState.error?.message;
+        return (
+          <fieldset
+            className={cn("grid gap-2", className)}
+            aria-describedby={describedBy(ids, description, error)}
+            aria-invalid={Boolean(error)}
+          >
+            <legend className="mb-1 text-sm font-medium">{label}</legend>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {options.map((option) => {
+                const optionId = `${ids.inputId}-${option.value}`;
+                return (
+                  <div key={option.value} className="flex items-center gap-2.5">
+                    <Checkbox
+                      id={optionId}
+                      checked={selected.includes(option.value)}
+                      onCheckedChange={(checked) =>
+                        field.onChange(
+                          checked === true
+                            ? [...selected, option.value]
+                            : selected.filter((value) => value !== option.value),
+                        )
+                      }
+                      disabled={disabled || formState.isSubmitting}
+                    />
+                    <label htmlFor={optionId} className="text-sm leading-snug">
+                      {option.label}
+                    </label>
+                  </div>
+                );
+              })}
+            </div>
+            {description && (
+              <p id={ids.descriptionId} className="text-xs text-muted-foreground">
+                {description}
+              </p>
+            )}
+            {error && (
+              <p id={ids.errorId} className="text-sm text-destructive">
+                {error}
+              </p>
+            )}
+          </fieldset>
+        );
+      }}
+    />
+  );
+}
+
 /** Griglia responsive per affiancare campi brevi. */
 export function FieldRow({ children, columns = 2 }: { children: React.ReactNode; columns?: 2 | 3 }) {
   return <div className={cn("grid gap-4", columns === 2 ? "sm:grid-cols-2" : "sm:grid-cols-3")}>{children}</div>;

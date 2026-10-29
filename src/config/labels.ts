@@ -4,6 +4,7 @@ import type {
   ActivityAction,
   ApplicationSource,
   AvailabilityType,
+  CandidateOrigin,
   ContactAction,
   DocumentProcessingStatus,
   DocumentType,
@@ -143,6 +144,13 @@ export const ACTIVE_POLICY_STATUS_LABELS: Record<ActivePolicyStatus, string> = {
   ACTIVE: "In corso",
   COMPLETED: "Concluso",
   INTERRUPTED: "Interrotto",
+};
+
+export const CANDIDATE_ORIGIN_LABELS: Record<CandidateOrigin, string> = {
+  ADV_CORE: "ADV Core",
+  INDEED: "Indeed",
+  LINKEDIN: "LinkedIn",
+  MANUAL: "Inserito a mano",
 };
 
 export const SELECTION_STATUS_LABELS: Record<SelectionStatus, string> = {

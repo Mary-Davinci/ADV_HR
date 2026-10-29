@@ -7,7 +7,7 @@ import {
   toCandidateSearchQuery,
   toSearchParams,
 } from "./candidate-filters";
-import { COLLECTION_SCHEMAS, identitySchema, preferencesSchema } from "./profile-schemas";
+import { COLLECTION_SCHEMAS, identitySchema, preferencesSchema, trackingSchema } from "./profile-schemas";
 
 // Mercoledì 30 settembre 2026, 10:00 ora locale.
 const NOW = new Date(2026, 8, 30, 10, 0);
@@ -26,6 +26,21 @@ describe("candidate search filters (URL)", () => {
     });
     expect(filters).toMatchObject({ q: "rossi", city: "Bergamo", protected: "yes", license: "B", minExp: 3 });
     expect(countAdvancedFilters(filters)).toBe(6);
+  });
+
+  it("maps policy, orientation and origin filters to the domain query", () => {
+    const filters = parseCandidateFilters({ policy: "NONE", orientation: "yes", origin: "INDEED", region: "Calabria" });
+    expect(countAdvancedFilters(filters)).toBe(4);
+    expect(toCandidateSearchQuery(filters, NOW)).toMatchObject({
+      activePolicy: "NONE",
+      orientationCompleted: true,
+      origin: "INDEED",
+      region: "Calabria",
+    });
+    expect(parseCandidateFilters({ origin: "FACEBOOK", orientation: "forse" })).toMatchObject({
+      origin: undefined,
+      orientation: undefined,
+    });
   });
 
   it("drops tampered values instead of failing or passing them to SQL", () => {
@@ -72,6 +87,20 @@ describe("candidate search filters (URL)", () => {
 });
 
 describe("candidate form schemas", () => {
+  it("validates the tracking section (origin, orientation, activatable policies)", () => {
+    expect(
+      trackingSchema.parse({ origin: "LINKEDIN", orientationCompletedOn: "", activatablePolicies: ["DIL", "GOL"] }),
+    ).toEqual({ origin: "LINKEDIN", orientationCompletedOn: null, activatablePolicies: ["DIL", "GOL"] });
+    expect(
+      trackingSchema.safeParse({ origin: "ADV_CORE", orientationCompletedOn: "2999-01-01", activatablePolicies: [] })
+        .success,
+    ).toBe(false);
+    expect(
+      trackingSchema.safeParse({ origin: "ADV_CORE", orientationCompletedOn: "", activatablePolicies: ["BONUS"] })
+        .success,
+    ).toBe(false);
+  });
+
   it("normalises identity input and validates the fiscal code format", () => {
     const parsed = identitySchema.parse({
       firstName: " Martina ",

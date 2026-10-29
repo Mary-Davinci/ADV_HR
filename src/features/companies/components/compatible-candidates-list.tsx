@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Fragment, useMemo, useState } from "react";
 
+import { FilterSelect } from "@/components/common/filter-select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -24,14 +25,20 @@ const GROUPS: Array<{ source: PositionMatchSource; title: string; hint: string }
   { source: "DETAILS", title: "Mestiere presente in formazione o note", hint: "corsi, certificazioni, note" },
 ];
 
-type FilterKey = "near" | "experienced" | "readableCv" | "license";
+type FilterKey = "near" | "experienced" | "readableCv" | "license" | "policy" | "noPolicy" | "orientation";
 
 const FILTERS: Array<{ key: FilterKey; label: string; test: (item: PositionMatch) => boolean }> = [
   { key: "near", label: "Vicini alla sede", test: (item) => item.sameProvince || item.sameRegion },
   { key: "experienced", label: "Almeno 2 anni", test: (item) => (item.experienceYears ?? 0) >= 2 },
   { key: "readableCv", label: "CV leggibile", test: (item) => item.hasReadableCv },
   { key: "license", label: "Con patente", test: (item) => item.drivingLicense !== null },
+  { key: "policy", label: "Con politica attiva", test: (item) => item.hasActivePolicy },
+  { key: "noPolicy", label: "Senza politica attiva", test: (item) => !item.hasActivePolicy },
+  { key: "orientation", label: "Orientamento completato", test: (item) => item.orientationCompleted },
 ];
+
+/** "Con" e "senza" politica attiva si escludono: attivarne uno spegne l'altro. */
+const EXCLUSIVE: Partial<Record<FilterKey, FilterKey>> = { policy: "noPolicy", noPolicy: "policy" };
 
 const COLUMNS = 10;
 
@@ -183,10 +190,25 @@ export function CompatibleCandidatesList({
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [active, setActive] = useState<Set<FilterKey>>(new Set());
+  const [region, setRegion] = useState<string | undefined>();
+
+  // Regioni presenti nella lista, con il numero di candidati.
+  const regions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const item of items) if (item.region) counts.set(item.region, (counts.get(item.region) ?? 0) + 1);
+    return [...counts]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([value, count]) => ({ value, label: `${value} (${count})` }));
+  }, [items]);
 
   const visible = useMemo(
-    () => items.filter((item) => FILTERS.every((filter) => !active.has(filter.key) || filter.test(item))),
-    [items, active],
+    () =>
+      items.filter(
+        (item) =>
+          (!region || item.region === region) &&
+          FILTERS.every((filter) => !active.has(filter.key) || filter.test(item)),
+      ),
+    [items, active, region],
   );
   const addable = visible.filter((item) => !item.alreadyInSelection);
   const allSelected = addable.length > 0 && addable.every((item) => selected.has(item.candidateId));
@@ -215,7 +237,11 @@ export function CompatibleCandidatesList({
     setActive((current) => {
       const next = new Set(current);
       if (next.has(key)) next.delete(key);
-      else next.add(key);
+      else {
+        next.add(key);
+        const opposite = EXCLUSIVE[key];
+        if (opposite) next.delete(opposite);
+      }
       return next;
     });
 
@@ -224,6 +250,16 @@ export function CompatibleCandidatesList({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filtra i candidati">
           <span className="text-sm text-muted-foreground">Mostra solo:</span>
+          {regions.length > 0 && (
+            <FilterSelect
+              label="Regione di residenza"
+              value={region}
+              options={regions}
+              allLabel="Tutte le regioni"
+              onChange={setRegion}
+              className="h-8 sm:min-w-40"
+            />
+          )}
           {FILTERS.map((filter) => {
             const pressed = active.has(filter.key);
             return (
@@ -243,8 +279,16 @@ export function CompatibleCandidatesList({
               </Button>
             );
           })}
-          {active.size > 0 && (
-            <Button type="button" size="sm" variant="ghost" onClick={() => setActive(new Set())}>
+          {(active.size > 0 || region) && (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setActive(new Set());
+                setRegion(undefined);
+              }}
+            >
               Azzera
             </Button>
           )}

@@ -5,6 +5,7 @@ import {
   ACTIVE_POLICY_PROGRAMS,
   ACTIVE_POLICY_STATUSES,
   AVAILABILITY_TYPES,
+  CANDIDATE_ORIGINS,
   DRIVING_LICENSE_CATEGORIES,
   EDUCATION_LEVELS,
   EMPLOYMENT_STATUSES,
@@ -50,6 +51,7 @@ export const languageLevelEnum = pgEnum("language_level", LANGUAGE_LEVELS);
 export const drivingLicenseCategoryEnum = pgEnum("driving_license_category", DRIVING_LICENSE_CATEGORIES);
 export const activePolicyProgramEnum = pgEnum("active_policy_program", ACTIVE_POLICY_PROGRAMS);
 export const activePolicyStatusEnum = pgEnum("active_policy_status", ACTIVE_POLICY_STATUSES);
+export const candidateOriginEnum = pgEnum("candidate_origin", CANDIDATE_ORIGINS);
 
 export const companySourceEnum = pgEnum("company_source", COMPANY_SOURCES);
 export const selectionStatusEnum = pgEnum("selection_status", SELECTION_STATUSES);

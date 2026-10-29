@@ -2,6 +2,7 @@ import {
   getCandidateFullName,
   type Activity,
   type ApplicationEvaluation,
+  type CandidateTrackingInput,
   type ContactAction,
   type DocumentMetadata,
   type EntityId,
@@ -182,6 +183,16 @@ export function createCandidateService(context: ServiceContext) {
       await store.transaction(async (repos) => {
         await repos.candidates.upsertProfile(id, input, nowOf(context));
         await afterProfileChange(repos, id, "profile", changedFields(aggregate.profile, input));
+      });
+    },
+
+    /** Origine, orientamento completato e politiche attive attivabili. */
+    async updateTracking(id: EntityId, input: CandidateTrackingInput): Promise<void> {
+      assertCan(actor, "candidate.edit");
+      const before = await requireCandidate(id);
+      await store.transaction(async (repos) => {
+        await repos.candidates.updateTracking(id, input);
+        await afterProfileChange(repos, id, "tracking", changedFields(before, input));
       });
     },
 

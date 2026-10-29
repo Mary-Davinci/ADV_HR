@@ -149,6 +149,31 @@ describe("PostgreSQL repositories", () => {
     expect(await lastNames({ activePolicy: "GOL", activePolicyYear: 2025 })).not.toContain("Villa");
     expect(await lastNames({ activePolicyYear: 2026 })).toContain("Villa");
     expect(await lastNames({ activePolicy: "GOL", activePolicyYear: 2026 })).not.toContain("Galli");
+
+    const withoutPolicy = await lastNames({ activePolicy: "NONE", limit: 200 });
+    expect(withoutPolicy).not.toContain("Galli");
+    expect(withoutPolicy).not.toContain("Villa");
+    expect(withoutPolicy.length).toBeGreaterThan(0);
+  });
+
+  it("saves origin, orientation and activatable policies and filters by them", async () => {
+    const [galli] = (await testDb.store.candidates.search({ text: "Galli" })).items;
+    await testDb.store.candidates.updateTracking(galli!.id, {
+      origin: "INDEED",
+      orientationCompletedOn: "2026-09-15",
+      activatablePolicies: ["DIL", "GOL", "DIL"],
+    });
+
+    const saved = await testDb.store.candidates.getById(galli!.id);
+    expect(saved).toMatchObject({ origin: "INDEED", orientationCompletedOn: "2026-09-15" });
+    expect(saved?.activatablePolicies.sort()).toEqual(["DIL", "GOL"]);
+
+    const lastNames = async (query: Parameters<typeof testDb.store.candidates.search>[0]) =>
+      (await testDb.store.candidates.search({ ...query, limit: 200 })).items.map((item) => item.lastName);
+    expect(await lastNames({ orientationCompleted: true })).toEqual(["Galli"]);
+    expect(await lastNames({ orientationCompleted: false })).not.toContain("Galli");
+    expect(await lastNames({ origin: "INDEED" })).toEqual(["Galli"]);
+    expect(await lastNames({ origin: "MANUAL" })).not.toContain("Galli");
   });
 
   it("treats wildcard characters in user input literally", async () => {

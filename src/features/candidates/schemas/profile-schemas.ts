@@ -4,6 +4,7 @@ import {
   ACTIVE_POLICY_PROGRAMS,
   ACTIVE_POLICY_STATUSES,
   AVAILABILITY_TYPES,
+  CANDIDATE_ORIGINS,
   CONTACT_ACTIONS,
   DRIVING_LICENSE_CATEGORIES,
   EDUCATION_LEVELS,
@@ -46,6 +47,16 @@ export const identitySchema = z.object({
     "Data di nascita non valida",
   ),
   gender: z.enum(GENDERS),
+});
+
+/** Origine, orientamento e politiche attivabili (sezione "Percorso"). */
+export const trackingSchema = z.object({
+  origin: z.enum(CANDIDATE_ORIGINS),
+  orientationCompletedOn: optionalDate.refine(
+    (value) => value === null || (value > "2000-01-01" && new Date(value) <= new Date()),
+    "Data non valida (non può essere futura)",
+  ),
+  activatablePolicies: z.array(z.enum(ACTIVE_POLICY_PROGRAMS)).max(ACTIVE_POLICY_PROGRAMS.length),
 });
 
 export const profileSchema = z.object({

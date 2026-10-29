@@ -20,6 +20,7 @@ import {
   activePolicyProgramEnum,
   activePolicyStatusEnum,
   availabilityEnum,
+  candidateOriginEnum,
   drivingLicenseCategoryEnum,
   educationLevelEnum,
   employmentStatusEnum,
@@ -49,9 +50,19 @@ export const candidates = pgTable(
     phone: varchar("phone", { length: 40 }),
     birthDate: date("birth_date", { mode: "string" }),
     gender: genderEnum("gender").notNull().default("NOT_SPECIFIED"),
+    /** Da dove arriva il candidato; quelli importati da ADV CORE sono `ADV_CORE`. */
+    origin: candidateOriginEnum("origin").notNull().default("MANUAL"),
+    /** Percorso di orientamento completato (data); null = non completato. */
+    orientationCompletedOn: date("orientation_completed_on", { mode: "string" }),
+    /** Politiche attive attivabili secondo HR (non ancora sottoscritte). */
+    activatablePolicies: activePolicyProgramEnum("activatable_policies")
+      .array()
+      .notNull()
+      .default(sql`'{}'`),
     ...timestamps(),
   },
   (t) => [
+    index("candidates_origin_idx").on(t.origin),
     index("candidates_last_name_idx").on(sql`lower(${t.lastName})`),
     uniqueIndex("candidates_fiscal_code_uq").on(t.fiscalCode),
     index("candidates_email_idx").on(sql`lower(${t.email})`),

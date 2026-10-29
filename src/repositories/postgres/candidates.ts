@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
 
 import {
   activePolicyParticipations,
@@ -32,6 +32,8 @@ import {
   type CandidatePreferences,
   type CandidateProfile,
   type CandidateSkill,
+  type CandidateOrigin,
+  type CandidateTrackingInput,
   type EducationLevel,
   type EntityId,
   type Page,
@@ -73,6 +75,9 @@ function toCandidate(row: CandidateRow): Candidate {
     phone: row.phone,
     birthDate: row.birthDate,
     gender: row.gender,
+    origin: row.origin,
+    orientationCompletedOn: row.orientationCompletedOn,
+    activatablePolicies: row.activatablePolicies,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -322,7 +327,11 @@ function buildConditions(query: CandidateSearchQuery): SQL[] {
       WHERE l.candidate_id = ${candidates.id} AND lower(l.language) = lower(${query.language})
     )`);
   }
-  if (query.activePolicy || query.activePolicyYear) {
+  if (query.activePolicy === "NONE") {
+    conditions.push(
+      sql`NOT EXISTS (SELECT 1 FROM active_policy_participations ap WHERE ap.candidate_id = ${candidates.id})`,
+    );
+  } else if (query.activePolicy || query.activePolicyYear) {
     const program = query.activePolicy && query.activePolicy !== "ANY" ? query.activePolicy : null;
     conditions.push(sql`EXISTS (
       SELECT 1 FROM active_policy_participations ap WHERE ap.candidate_id = ${candidates.id}
@@ -330,6 +339,14 @@ function buildConditions(query: CandidateSearchQuery): SQL[] {
       ${query.activePolicyYear ? sql`AND ap.reference_year = ${query.activePolicyYear}` : sql``}
     )`);
   }
+  if (query.orientationCompleted !== undefined) {
+    conditions.push(
+      query.orientationCompleted
+        ? isNotNull(candidates.orientationCompletedOn)
+        : isNull(candidates.orientationCompletedOn),
+    );
+  }
+  if (query.origin) conditions.push(eq(candidates.origin, query.origin));
   if (query.minExperienceMonths !== undefined && query.minExperienceMonths > 0) {
     conditions.push(sql`${experienceMonths} >= ${query.minExperienceMonths}`);
   }
@@ -617,6 +634,17 @@ export class PostgresCandidateRepository implements CandidateRepository {
     return toPreferences(id, row);
   }
 
+  async updateTracking(id: EntityId, input: CandidateTrackingInput): Promise<void> {
+    await this.db
+      .update(candidates)
+      .set({
+        origin: input.origin,
+        orientationCompletedOn: input.orientationCompletedOn,
+        activatablePolicies: [...new Set(input.activatablePolicies)],
+      })
+      .where(eq(candidates.id, id));
+  }
+
   async markReviewed(id: EntityId, at: Date): Promise<void> {
     await this.db.update(candidates).set({ updatedAt: at }).where(eq(candidates.id, id));
     await this.db
@@ -760,7 +788,9 @@ export class PostgresCandidateRepository implements CandidateRepository {
       ),
       enriched AS MATERIALIZED (
         SELECT h.*, c.first_name, c.last_name, c.id AS candidate_id,
-               pr.residence_city, pr.residence_province,
+               pr.residence_city, pr.residence_province, pr.residence_region, c.origin,
+               c.orientation_completed_on IS NOT NULL AS orientation_completed,
+               EXISTS (SELECT 1 FROM active_policy_participations ap WHERE ap.candidate_id = c.id) AS has_active_policy,
                coalesce(upper(pr.residence_province) = ${jobProvince}, false) AS same_province,
                coalesce(pr.residence_region = (SELECT region FROM job_region), false) AS same_region,
                adv.payload,
@@ -853,6 +883,10 @@ export class PostgresCandidateRepository implements CandidateRepository {
           employmentStatus: text(payload.stato_occupazionale),
           sameProvince: row.same_province,
           sameRegion: row.same_region,
+          region: row.residence_region,
+          hasActivePolicy: row.has_active_policy,
+          orientationCompleted: row.orientation_completed,
+          origin: row.origin,
           hasCv: row.has_cv,
           hasReadableCv: row.has_readable_cv,
           cvDocumentId: row.cv_document_id,
@@ -890,6 +924,10 @@ interface PositionMatchRow {
   last_name: string;
   residence_city: string | null;
   residence_province: string | null;
+  residence_region: string | null;
+  origin: CandidateOrigin;
+  orientation_completed: boolean;
+  has_active_policy: boolean;
   same_province: boolean;
   same_region: boolean;
   payload: Record<string, unknown> | null;

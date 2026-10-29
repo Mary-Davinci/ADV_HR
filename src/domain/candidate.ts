@@ -85,6 +85,10 @@ export type ActivePolicyProgram = (typeof ACTIVE_POLICY_PROGRAMS)[number];
 export const ACTIVE_POLICY_STATUSES = ["ACTIVE", "COMPLETED", "INTERRUPTED"] as const;
 export type ActivePolicyStatus = (typeof ACTIVE_POLICY_STATUSES)[number];
 
+/** Da dove arriva il candidato: importato da ADV CORE, dalle piattaforme di annunci o inserito a mano. */
+export const CANDIDATE_ORIGINS = ["ADV_CORE", "INDEED", "LINKEDIN", "MANUAL"] as const;
+export type CandidateOrigin = (typeof CANDIDATE_ORIGINS)[number];
+
 /* ------------------------------------------------------------------ */
 /* Entità                                                               */
 /* ------------------------------------------------------------------ */
@@ -99,6 +103,21 @@ export interface Candidate extends AuditInfo {
   phone: string | null;
   birthDate: ISODate | null;
   gender: Gender;
+  origin: CandidateOrigin;
+  /** Data in cui ha completato il percorso di orientamento; null = non completato. */
+  orientationCompletedOn: ISODate | null;
+  /**
+   * Politiche attive che si possono attivare per il candidato (valutazione HR),
+   * distinte da quelle già sottoscritte (`ActivePolicyParticipation`).
+   */
+  activatablePolicies: ActivePolicyProgram[];
+}
+
+/** Dati di percorso modificabili da HR, separati dall'anagrafica. */
+export interface CandidateTrackingInput {
+  origin: CandidateOrigin;
+  orientationCompletedOn: ISODate | null;
+  activatablePolicies: ActivePolicyProgram[];
 }
 
 export interface CandidateProfile {

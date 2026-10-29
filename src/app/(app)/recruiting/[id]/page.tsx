@@ -59,7 +59,7 @@ export default async function CandidatePage({ params, searchParams }: PageProps<
   const latest = profile.applications[0];
 
   const tabs = [
-    { value: "overview", label: "Panoramica", content: <OverviewPanel profile={profile} /> },
+    { value: "overview", label: "Panoramica", content: <OverviewPanel profile={profile} canEdit={canEdit} /> },
     { value: "profile", label: "Profilo", content: <ProfilePanel profile={profile} canEdit={canEdit} /> },
     {
       value: "experience",

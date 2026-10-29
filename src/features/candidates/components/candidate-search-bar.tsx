@@ -13,8 +13,10 @@ import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
   ACTIVE_POLICY_PROGRAM_LABELS,
+  CANDIDATE_ORIGIN_LABELS,
   DRIVING_LICENSE_LABELS,
   EMPLOYMENT_STATUS_LABELS,
+  ITALIAN_REGIONS,
   optionsOf,
   WORK_MODE_LABELS,
   WORK_TIME_LABELS,
@@ -23,6 +25,7 @@ import { CANDIDATE_SORT_OPTIONS } from "@/repositories/types";
 
 import {
   ANY_ACTIVE_POLICY,
+  NO_ACTIVE_POLICY,
   countAdvancedFilters,
   DEFAULT_SORT,
   hasActiveFilters,
@@ -187,6 +190,8 @@ type AdvancedValues = Pick<
   | "minExp"
   | "policy"
   | "policyYear"
+  | "orientation"
+  | "origin"
 >;
 
 const EMPTY_ADVANCED: AdvancedValues = {
@@ -204,6 +209,8 @@ const EMPTY_ADVANCED: AdvancedValues = {
   minExp: undefined,
   policy: undefined,
   policyYear: undefined,
+  orientation: undefined,
+  origin: undefined,
 };
 
 function pickAdvanced(filters: CandidateFilters): AdvancedValues {
@@ -294,11 +301,11 @@ function AdvancedFiltersSheet({
               Territorio
             </legend>
             <TextFilter label="Città" value={values.city} onChange={(v) => set("city", v)} placeholder="es. Bergamo" />
-            <TextFilter
+            <SelectFilter
               label="Regione"
               value={values.region}
+              options={ITALIAN_REGIONS.map((region) => ({ value: region, label: region }))}
               onChange={(v) => set("region", v)}
-              placeholder="es. Lombardia"
             />
             <SelectFilter
               label="Disponibile al trasferimento"
@@ -348,13 +355,14 @@ function AdvancedFiltersSheet({
           </fieldset>
           <fieldset className="grid gap-3">
             <legend className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-              Politiche attive
+              Politiche attive e percorso
             </legend>
             <SelectFilter
               label="Programma"
               value={values.policy}
               options={[
-                { value: ANY_ACTIVE_POLICY, label: "Qualsiasi politica attiva" },
+                { value: ANY_ACTIVE_POLICY, label: "Almeno una (sottoscritta)" },
+                { value: NO_ACTIVE_POLICY, label: "Nessuna sottoscritta" },
                 ...optionsOf(ACTIVE_POLICY_PROGRAM_LABELS),
               ]}
               onChange={(v) => set("policy", v as AdvancedValues["policy"])}
@@ -372,6 +380,18 @@ function AdvancedFiltersSheet({
                 className="h-9"
               />
             </div>
+            <SelectFilter
+              label="Orientamento completato"
+              value={values.orientation}
+              options={YES_NO}
+              onChange={(v) => set("orientation", v as AdvancedValues["orientation"])}
+            />
+            <SelectFilter
+              label="Origine del candidato"
+              value={values.origin}
+              options={optionsOf(CANDIDATE_ORIGIN_LABELS)}
+              onChange={(v) => set("origin", v as AdvancedValues["origin"])}
+            />
           </fieldset>
           <fieldset className="grid gap-3">
             <legend className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
