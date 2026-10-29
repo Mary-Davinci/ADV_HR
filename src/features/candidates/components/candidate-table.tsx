@@ -8,6 +8,7 @@ import { EMPTY_VALUE, formatDateTime, formatSlot, formatTimeAgo } from "@/lib/fo
 import type { CandidateListItem } from "@/repositories/types";
 
 import { candidateHref } from "../lib/routes";
+import { OriginBadge } from "./origin-badge";
 
 function Stage({ item }: { item: CandidateListItem }) {
   const application = item.latestApplication;
@@ -30,7 +31,8 @@ function CandidateCard({ item }: { item: CandidateListItem }) {
   return (
     <li className="relative rounded-xl border bg-card p-4 transition-colors focus-within:ring-2 focus-within:ring-ring hover:bg-muted/40">
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+        <OriginBadge origin={item.origin} className="mt-0.5" />
+        <div className="min-w-0 flex-1">
           <Link
             href={candidateHref(item.id)}
             className="font-medium outline-none after:absolute after:inset-0 after:rounded-xl"
@@ -95,18 +97,23 @@ export function CandidateTable({ items }: { items: CandidateListItem[] }) {
             {items.map((item) => (
               <TableRow key={item.id} className="group relative focus-within:bg-muted/50">
                 <TableCell className="py-3 pl-4">
-                  <Link
-                    href={candidateHref(item.id)}
-                    className="font-medium outline-none after:absolute after:inset-0 focus-visible:underline"
-                  >
-                    {item.firstName} {item.lastName}
-                  </Link>
-                  {item.city && (
-                    <p className="text-xs text-muted-foreground">
-                      {item.city}
-                      {item.province && ` (${item.province})`}
-                    </p>
-                  )}
+                  <div className="flex items-center gap-3">
+                    <OriginBadge origin={item.origin} />
+                    <div className="min-w-0">
+                      <Link
+                        href={candidateHref(item.id)}
+                        className="font-medium outline-none after:absolute after:inset-0 focus-visible:underline"
+                      >
+                        {item.firstName} {item.lastName}
+                      </Link>
+                      {item.city && (
+                        <p className="text-xs text-muted-foreground">
+                          {item.city}
+                          {item.province && ` (${item.province})`}
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 </TableCell>
                 <TableCell>
                   <Stage item={item} />

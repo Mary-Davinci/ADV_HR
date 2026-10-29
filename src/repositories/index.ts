@@ -19,7 +19,10 @@ export type * from "./types";
  * Pagine, componenti e servizi non devono cambiare quando cambia la sorgente.
  */
 
-const globalForStore = globalThis as unknown as { __advHrDataStore?: DataStore };
+// A livello di modulo, non su globalThis: con l'hot reload il modulo si ricarica
+// e i repository usano il codice aggiornato. Il pool di connessioni, quello sì,
+// resta condiviso su globalThis (db/client.ts), quindi non si moltiplica.
+let store: DataStore | undefined;
 
 function createDataStore(): DataStore {
   switch (serverEnv.DATA_SOURCE) {
@@ -29,6 +32,6 @@ function createDataStore(): DataStore {
 }
 
 export function getDataStore(): DataStore {
-  globalForStore.__advHrDataStore ??= createDataStore();
-  return globalForStore.__advHrDataStore;
+  store ??= createDataStore();
+  return store;
 }

@@ -79,6 +79,7 @@ export interface CandidateListItem {
   firstName: string;
   lastName: string;
   fiscalCode: string | null;
+  origin: CandidateOrigin;
   city: string | null;
   province: string | null;
   employmentStatus: EmploymentStatus;

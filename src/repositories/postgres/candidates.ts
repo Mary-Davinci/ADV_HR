@@ -429,6 +429,7 @@ export class PostgresCandidateRepository implements CandidateRepository {
         firstName: row.candidate.firstName,
         lastName: row.candidate.lastName,
         fiscalCode: row.candidate.fiscalCode,
+        origin: row.candidate.origin,
         city: row.city,
         province: row.province,
         employmentStatus: row.employmentStatus ?? "UNKNOWN",
