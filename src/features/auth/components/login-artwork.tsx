@@ -1,10 +1,10 @@
 /**
- * Pannello di accesso: al centro il marchio di Accademia Da Vinci stilizzato
- * (D gialla con l'Uomo Vitruviano nelle due pose di Leonardo) in un medaglione
- * avorio, attorno la geometria vitruviana (cerchio e quadrato con base comune)
- * animata con un effetto "tecnologico": scala graduata e cerchi in rotazione,
- * un fascio di luce che percorre il cerchio, un punto in orbita, assi con un
- * flusso di trattini. Sotto, il nome dell'app. Tutto vettoriale.
+ * Pannello di accesso: al centro il logo ufficiale di Accademia Da Vinci in un
+ * medaglione avorio (il logo è pensato per fondo chiaro), attorno la geometria
+ * vitruviana (cerchio e quadrato con base comune) animata con un effetto
+ * "tecnologico": scala graduata e cerchi in rotazione, un fascio di luce che
+ * percorre il cerchio, un punto in orbita, assi con un flusso di trattini.
+ * Sotto, il nome dell'app.
  *
  * Con "riduci animazioni" attivo nel sistema il disegno resta fermo.
  * Il font del nome arriva dalla variabile `--font-display` impostata dalla pagina.
@@ -24,9 +24,10 @@ const TICK_GAP = (2 * Math.PI * TICK_R) / 72 - 1;
 // Fascio di luce: un arco di ~25° che percorre il cerchio.
 const SWEEP_LENGTH = (2 * Math.PI * R * 25) / 360;
 const SWEEP_GAP = 2 * Math.PI * R - SWEEP_LENGTH;
-// Medaglione: il marchio è disegnato in un riquadro 300×300 centrato su (152, 150).
-const MEDAL_R = 165;
-const MEDAL_SCALE = MEDAL_R / 140;
+// Medaglione con il logo ufficiale (public/brand, 973×348 px con trasparenza).
+const MEDAL_R = 175;
+const LOGO_W = 272;
+const LOGO_H = Math.round((LOGO_W * 348) / 973);
 
 const CSS = `
 .la-spin, .la-spin-rev, .la-sweep, .la-orbit {
@@ -67,10 +68,6 @@ export function LoginArtwork() {
           <stop offset="0%" stopColor="#fbf7ee" />
           <stop offset="100%" stopColor="#eee4cf" />
         </radialGradient>
-        <linearGradient id="login-yellow" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#f7c843" />
-          <stop offset="100%" stopColor="#e3a414" />
-        </linearGradient>
         <filter id="login-neon" x="-50%" y="-50%" width="200%" height="200%">
           <feGaussianBlur stdDeviation="4" result="blur" />
           <feMerge>
@@ -145,7 +142,7 @@ export function LoginArtwork() {
         <circle cx={CX} cy={CY - MEDAL_R - 40} r="3.5" fill="#f7c843" filter="url(#login-neon)" />
       </g>
 
-      {/* Medaglione con il marchio */}
+      {/* Medaglione con il logo */}
       <circle
         className="la-pulse"
         cx={CX}
@@ -156,39 +153,15 @@ export function LoginArtwork() {
         strokeWidth="2"
         filter="url(#login-neon)"
       />
-      <g transform={`translate(${CX} ${CY}) scale(${MEDAL_SCALE.toFixed(3)}) translate(-152 -150)`}>
-        <circle cx="152" cy="150" r="140" fill="url(#login-disc)" stroke="#c9a24a" strokeWidth="2" />
-        <circle cx="152" cy="150" r="133" fill="none" stroke="#c9a24a" strokeOpacity="0.5" strokeWidth="0.8" />
-        <g transform="translate(152 150) scale(0.86) translate(-152 -150)">
-          <path
-            fill="url(#login-yellow)"
-            fillRule="evenodd"
-            d="M40 40 H150 C220 40 262 92 262 150 C262 208 220 260 150 260 H40 V246 H62 V54 H40 Z M106 74 H148 C196 74 222 108 222 150 C222 192 196 226 148 226 H106 Z"
-          />
-          {/* Uomo Vitruviano: posa principale piena, seconda posa più leggera */}
-          <g fill="#2b2418">
-            <circle cx="152" cy="63" r="11.5" />
-            <path d="M147 73 H157 V82 H147 Z" />
-            <path d="M131 89 Q152 80 173 89 Q172 100 169 108 Q165 124 164 141 Q152 148 140 141 Q139 124 135 108 Q132 100 131 89 Z" />
-          </g>
-          <g fill="none" stroke="#2b2418" strokeLinecap="round">
-            <path d="M135 91 L95 94" strokeWidth="7" />
-            <path d="M95 94 L48 97" strokeWidth="4.5" />
-            <path d="M169 91 L209 94" strokeWidth="7" />
-            <path d="M209 94 L256 97" strokeWidth="4.5" />
-            <path d="M146 141 L144 196" strokeWidth="9" />
-            <path d="M144 196 L142 252" strokeWidth="5.5" />
-            <path d="M158 141 L160 196" strokeWidth="9" />
-            <path d="M160 196 L162 252" strokeWidth="5.5" />
-            <g strokeOpacity="0.45">
-              <path d="M136 89 L100 72 L60 55" strokeWidth="3.5" />
-              <path d="M168 89 L204 72 L244 55" strokeWidth="3.5" />
-              <path d="M145 141 L124 194 L102 246" strokeWidth="4" />
-              <path d="M159 141 L180 194 L202 246" strokeWidth="4" />
-            </g>
-          </g>
-        </g>
-      </g>
+      <circle cx={CX} cy={CY} r={MEDAL_R} fill="url(#login-disc)" stroke="#c9a24a" strokeWidth="2" />
+      <circle cx={CX} cy={CY} r={MEDAL_R - 9} fill="none" stroke="#c9a24a" strokeOpacity="0.5" strokeWidth="0.8" />
+      <image
+        href="/brand/accademia-da-vinci-logo.png"
+        x={CX - LOGO_W / 2}
+        y={CY - LOGO_H / 2}
+        width={LOGO_W}
+        height={LOGO_H}
+      />
 
       <text
         x={CX}
