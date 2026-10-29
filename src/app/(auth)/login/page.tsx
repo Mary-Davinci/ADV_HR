@@ -1,59 +1,44 @@
-import { CalendarClock, FileSearch, ShieldCheck } from "lucide-react";
 import type { Metadata } from "next";
+import { Cormorant_Garamond } from "next/font/google";
 
 import { AppLogo } from "@/components/layout/app-logo";
 import { LoginArtwork } from "@/features/auth/components/login-artwork";
 import { LoginForm } from "@/features/auth/components/login-form";
 import { serverEnv } from "@/lib/env";
+import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Accesso" };
 
-const HIGHLIGHTS = [
-  { icon: FileSearch, text: "Ricerca e selezione dei candidati in un unico flusso" },
-  { icon: CalendarClock, text: "Agenda dei colloqui sempre aggiornata" },
-  { icon: ShieldCheck, text: "Dati personali trattati in modo riservato" },
-];
+/** Carattere con grazie per il nome dell'app e il titolo, solo in questa pagina. */
+const display = Cormorant_Garamond({
+  subsets: ["latin"],
+  weight: ["500", "600"],
+  variable: "--font-display",
+});
 
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   const { callbackUrl } = await searchParams;
 
   return (
-    <div className="grid min-h-svh lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
-      <aside className="relative hidden flex-col justify-between overflow-hidden border-r bg-[#f4f2ee] p-10 text-neutral-900 lg:flex">
+    <div className={cn(display.variable, "grid min-h-svh lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]")}>
+      <aside className="relative hidden flex-col items-center justify-end overflow-hidden bg-[#17140f] p-10 lg:flex">
         <LoginArtwork />
-        {/* Sfuma la geometria verso sinistra, dove sta il testo. */}
-        <div
-          aria-hidden="true"
-          className="absolute inset-0 bg-linear-to-r from-[#f4f2ee] via-[#f4f2ee]/85 via-45% to-transparent"
-        />
-        <AppLogo className="relative [&_.text-muted-foreground]:text-neutral-600" />
-        <div className="relative max-w-md space-y-6">
-          <h2 className="text-3xl font-semibold tracking-tight text-balance">
-            La piattaforma HR di Accademia Da Vinci
-          </h2>
-          <ul className="space-y-4">
-            {HIGHLIGHTS.map(({ icon: Icon, text }) => (
-              <li key={text} className="flex items-start gap-3 text-sm text-neutral-700">
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-neutral-300/70 bg-white/80">
-                  <Icon aria-hidden="true" className="size-4 text-[#8a6a1f]" />
-                </span>
-                <span className="pt-1.5">{text}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-        <p className="relative text-xs text-neutral-600">Uso interno riservato al personale autorizzato.</p>
+        <p className="relative text-xs text-[#a39a89]">Uso interno riservato al personale autorizzato.</p>
       </aside>
 
-      <main className="flex items-center justify-center px-6 py-12">
+      <main className="flex items-center justify-center bg-[#f7f3ea] px-6 py-12 text-[#1c1a17] dark:bg-background dark:text-foreground">
         <div className="w-full max-w-sm space-y-8">
           <AppLogo className="lg:hidden" />
           <div className="space-y-2">
-            <h1 className="text-2xl font-semibold tracking-tight">Accedi</h1>
-            <p className="text-sm text-muted-foreground">Inserisci le tue credenziali per continuare.</p>
+            <h1 className="font-(family-name:--font-display) text-4xl leading-tight font-semibold">Accedi</h1>
+            <p className="text-sm text-muted-foreground">Inserisci le tue credenziali aziendali per continuare.</p>
           </div>
 
           <LoginForm callbackUrl={typeof callbackUrl === "string" ? callbackUrl : undefined} />
+
+          <p className="text-center text-xs text-muted-foreground">
+            Problemi di accesso? Contatta l&apos;amministratore.
+          </p>
 
           {serverEnv.AUTH_SHOW_DEV_HINT && (
             <p className="rounded-lg border border-dashed bg-muted/50 px-3 py-2.5 text-xs text-muted-foreground">
