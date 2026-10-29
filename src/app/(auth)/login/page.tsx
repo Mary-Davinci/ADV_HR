@@ -1,8 +1,8 @@
 import { CalendarClock, FileSearch, ShieldCheck } from "lucide-react";
 import type { Metadata } from "next";
-import Image from "next/image";
 
 import { AppLogo } from "@/components/layout/app-logo";
+import { LoginArtwork } from "@/features/auth/components/login-artwork";
 import { LoginForm } from "@/features/auth/components/login-form";
 import { serverEnv } from "@/lib/env";
 
@@ -20,18 +20,11 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   return (
     <div className="grid min-h-svh lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
       <aside className="relative hidden flex-col justify-between overflow-hidden border-r bg-[#f4f2ee] p-10 text-neutral-900 lg:flex">
-        {/* Ancorato a sinistra: resta visibile solo il rilievo vitruviano. */}
-        <Image
-          src="/brand/login-background.jpg"
-          alt=""
-          fill
-          priority
-          sizes="50vw"
-          className="object-cover object-left"
-        />
+        <LoginArtwork />
+        {/* Sfuma la geometria verso sinistra, dove sta il testo. */}
         <div
           aria-hidden="true"
-          className="absolute inset-0 bg-linear-to-t from-[#f4f2ee] via-[#f4f2ee]/70 to-[#f4f2ee]/20"
+          className="absolute inset-0 bg-linear-to-r from-[#f4f2ee] via-[#f4f2ee]/85 via-45% to-transparent"
         />
         <AppLogo className="relative [&_.text-muted-foreground]:text-neutral-600" />
         <div className="relative max-w-md space-y-6">
