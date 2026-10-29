@@ -8,7 +8,7 @@ Piattaforma HR di Accademia Da Vinci — **V1 persistente** (PostgreSQL).
 
 ## Requisiti
 
-- Node.js ≥ 20.9 (sviluppato con Node 24), npm
+- Node.js 24 (richiesto anche in produzione: `engines` in package.json), npm
 - Docker (per PostgreSQL 17 + pgvector in sviluppo)
 
 ## Avvio rapido
