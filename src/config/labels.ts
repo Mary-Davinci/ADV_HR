@@ -11,10 +11,15 @@ import type {
   EducationLevel,
   EmploymentStatus,
   EvaluationResult,
+  ExperienceLevel,
   FeedbackType,
   Gender,
+  HiringDocument,
+  HiringIncentive,
   InterviewStatus,
   InterviewType,
+  JobContractType,
+  JobRequestStatus,
   LanguageLevel,
   MatchingEvidenceStatus,
   MatchingOverallStatus,
@@ -24,6 +29,7 @@ import type {
   SkillCategory,
   TaskPriority,
   TaskStatus,
+  WorkDay,
   WorkMode,
   WorkTime,
 } from "@/domain";
@@ -129,6 +135,7 @@ export const ACTIVE_POLICY_PROGRAM_LABELS: Record<ActivePolicyProgram, string> =
   DOTE_UNICA_LAVORO: "Dote Unica Lavoro",
   TIROCINIO: "Tirocinio",
   ASSEGNO_RICOLLOCAZIONE: "Assegno di ricollocazione",
+  DIL: "DIL",
   OTHER: "Altro programma",
 };
 
@@ -244,6 +251,7 @@ export const ACTIVITY_ACTION_LABELS: Record<ActivityAction, string> = {
   ADDED_TO_POOL: "Aggiunto al talent pool",
   REMOVED_FROM_POOL: "Rimosso dal talent pool",
   APPLICATION_CREATED: "Candidatura creata",
+  APPLICATION_REMOVED: "Candidatura rimossa dalla selezione",
   ...CONTACT_ACTION_LABELS,
 };
 
@@ -279,6 +287,59 @@ export function labelOf<T extends string>(
   if (value === null || value === undefined) return fallback;
   return labels[value] ?? fallback;
 }
+
+/* Richiesta di personale (modulo Job Description) */
+
+export const JOB_REQUEST_STATUS_LABELS: Record<JobRequestStatus, string> = {
+  DRAFT: "Bozza",
+  SENT: "Inviata all'azienda",
+  READY: "Compilata, in attesa di firma",
+  SIGNED: "Firmata, da verificare",
+  OPENED: "Selezione aperta",
+  CANCELLED: "Annullata",
+};
+
+export const EXPERIENCE_LEVEL_LABELS: Record<ExperienceLevel, string> = {
+  NONE: "Nessuna",
+  JUNIOR: "Junior",
+  SENIOR: "Senior",
+};
+
+export const JOB_CONTRACT_TYPE_LABELS: Record<JobContractType, string> = {
+  PERMANENT: "Tempo indeterminato",
+  FIXED_TERM: "Tempo determinato",
+  INTERNSHIP: "Tirocinio",
+  OTHER: "Altro",
+};
+
+export const WORK_DAY_LABELS: Record<WorkDay, string> = {
+  MON: "Lunedì",
+  TUE: "Martedì",
+  WED: "Mercoledì",
+  THU: "Giovedì",
+  FRI: "Venerdì",
+  SAT: "Sabato",
+  SUN: "Domenica",
+};
+
+export const HIRING_INCENTIVE_LABELS: Record<HiringIncentive, string> = {
+  APPRENTICESHIP: "Apprendistato",
+  PROTECTED_CATEGORIES: "Categorie protette (L. 68/99)",
+  LONG_TERM_UNEMPLOYED: "Iscritti di lunga durata (L. 407/90)",
+  MOBILITY_LISTS: "Iscrizione liste di mobilità",
+  INSERTION_CONTRACT: "Contratto di inserimento",
+  OTHER: "Altro",
+};
+
+export const HIRING_DOCUMENT_LABELS: Record<HiringDocument, string> = {
+  SAP_RECORD: "Scheda anagrafica/C2 storico (SAP)",
+  DID: "DID",
+  SERVICE_AGREEMENT: "Patto di servizio",
+  IDENTITY_DOCUMENT: "Documento d'identità e C.F.",
+  UPDATED_CV: "CV aggiornato",
+  TARGETED_PLACEMENT: "Attestazione iscrizione liste di collocamento mirato",
+  OTHER: "Altro",
+};
 
 /** Regioni italiane, con la grafia usata da ADV Core (filtri per regione). */
 export const ITALIAN_REGIONS = [

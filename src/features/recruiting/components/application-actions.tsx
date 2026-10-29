@@ -1,6 +1,14 @@
 "use client";
 
-import { CalendarPlus, ChevronDown, ClipboardCheck, Loader2, MessageSquarePlus, MoreHorizontal } from "lucide-react";
+import {
+  CalendarPlus,
+  ChevronDown,
+  ClipboardCheck,
+  Loader2,
+  MessageSquarePlus,
+  MoreHorizontal,
+  UserMinus,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -11,15 +19,18 @@ import {
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { Interview, RecruitingStage } from "@/domain";
+import type { ApplicationView } from "@/repositories/types";
 import { useActionMutation } from "@/hooks/use-action-mutation";
 
 import { REJECTION_STAGE_CODE } from "../constants";
 import { getStagePresentation } from "../stage-presentation";
 import { changeStageAction } from "../server/actions";
 import { EvaluationDialog, FeedbackDialog, InterviewDialog, RejectDialog, useDialogState } from "./application-dialogs";
+import { RemoveApplicationDialog } from "./remove-application-dialog";
 
 export interface ApplicationActionsProps {
   applicationId: string;
@@ -31,9 +42,11 @@ export interface ApplicationActionsProps {
   recruiterId: string | null;
   permissions: { manage: boolean; evaluate: boolean; feedback: boolean; interview: boolean };
   compact?: boolean;
+  /** Dati collegati alla candidatura: se presenti (e con permesso), compare "Rimuovi dalla selezione". */
+  related?: ApplicationView["related"];
 }
 
-type DialogName = "reject" | "evaluate" | "feedback" | "interview";
+type DialogName = "reject" | "evaluate" | "feedback" | "interview" | "remove";
 
 /**
  * Azioni su una candidatura. Ogni cambio di stage aggiorna la candidatura e
@@ -57,7 +70,8 @@ export function ApplicationActions(props: ApplicationActionsProps) {
     changeStage.mutate({ applicationId, stageId: nextStageId, reason: "" });
   }
 
-  const hasSecondary = permissions.evaluate || permissions.feedback || permissions.interview;
+  const canRemove = permissions.manage && props.related !== undefined;
+  const hasSecondary = permissions.evaluate || permissions.feedback || permissions.interview || canRemove;
 
   return (
     <div className={compact ? "flex items-center gap-1" : "flex flex-wrap items-center gap-2"}>
@@ -123,6 +137,15 @@ export function ApplicationActions(props: ApplicationActionsProps) {
                   Programma colloquio
                 </DropdownMenuItem>
               )}
+              {canRemove && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem variant="destructive" onClick={() => dialogs.show("remove")}>
+                    <UserMinus aria-hidden="true" />
+                    Rimuovi dalla selezione
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
@@ -145,6 +168,12 @@ export function ApplicationActions(props: ApplicationActionsProps) {
                 Colloquio
               </Button>
             )}
+            {canRemove && (
+              <Button variant="ghost" size="sm" onClick={() => dialogs.show("remove")}>
+                <UserMinus aria-hidden="true" />
+                Rimuovi
+              </Button>
+            )}
           </>
         ))}
 
@@ -163,6 +192,14 @@ export function ApplicationActions(props: ApplicationActionsProps) {
         candidateName={candidateName}
         interviews={props.interviews}
       />
+      {canRemove && props.related && (
+        <RemoveApplicationDialog
+          {...dialogs.props("remove")}
+          applicationId={applicationId}
+          candidateName={candidateName}
+          related={props.related}
+        />
+      )}
       <InterviewDialog
         {...dialogs.props("interview")}
         applicationId={applicationId}

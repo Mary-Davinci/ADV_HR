@@ -44,13 +44,57 @@ powershell -ExecutionPolicy Bypass -File scripts\windows\registra-sync-adv-core.
 
 ## Configurazione (`.env.local`)
 
-| Variabile                 | Note                                                                          |
-| ------------------------- | ----------------------------------------------------------------------------- |
-| `ADV_CORE_API_URL`        | indirizzo del gestionale, `https://` obbligatorio (http solo per host locali) |
-| `ADV_CORE_API_KEY`        | chiave consegnata dall'amministratore ADV CORE; segreta                       |
-| `ADV_CORE_SYNC_DOCUMENTS` | `true`/`false`, scarica i CV                                                  |
-| `ADV_CORE_SYNC_LOG_DIR`   | log mensili, default `./storage/logs`                                         |
-| `DOCUMENT_STORAGE_DIR`    | stesso storage dei documenti caricati in ADV_HR                               |
+| Variabile                   | Note                                                                          |
+| --------------------------- | ----------------------------------------------------------------------------- |
+| `ADV_CORE_API_URL`          | indirizzo del gestionale, `https://` obbligatorio (http solo per host locali) |
+| `ADV_CORE_API_KEY`          | chiave consegnata dall'amministratore ADV CORE; segreta                       |
+| `ADV_CORE_SYNC_DOCUMENTS`   | `true`/`false`, scarica i CV                                                  |
+| `ADV_CORE_SYNC_LOG_DIR`     | log mensili, default `./storage/logs`                                         |
+| `ADV_CORE_SYNC_TIMES`       | solo con cron in UTC (Railway): orari italiani validi, es. `13:20,18:20`      |
+| `DOCUMENT_STORAGE_PROVIDER` | `local` (default) o `s3`: stesso storage dei documenti caricati in ADV_HR     |
+| `DOCUMENT_STORAGE_DIR`      | cartella dello storage `local`                                                |
+| `S3_*`                      | bucket dello storage `s3`, vedi `.env.example`                                |
+
+## Produzione su Railway
+
+```
+ADV CORE (produzione)                         Railway (regione EU)
+  /api/v1/*.php  ◀── HTTPS + chiave API ──  servizio "adv-core-sync" (cron, IP statici in uscita)
+  allowlist: IP ufficio + 3 IP Railway         │ scrive                     ▲ legge
+                                               ▼                            │
+                                    Postgres (pgvector) ── servizio "web" (Next.js)
+                                    Bucket (documenti)  ──┘
+```
+
+Nessuna modifica all'API di ADV CORE: cambia solo da dove arrivano le richieste.
+
+1. **Database**: Postgres con **pgvector** (template dedicato, non il Postgres standard: le
+   migration creano l'estensione `vector`). Ai servizi: `DATABASE_URL=${{Postgres.DATABASE_URL}}`
+   (rete privata).
+2. **Documenti**: un Bucket Railway, condiviso da app e sync (un volume si collega a un solo
+   servizio). Variabili `DOCUMENT_STORAGE_PROVIDER=s3` e `S3_*` come riferimenti alle credenziali
+   del bucket. I bucket **non hanno backup automatici**: prevedere una copia periodica.
+3. **Servizio `adv-core-sync`**: stesso repository, comando di avvio
+   `npm run sync:adv-core -- --scheduled`, cron `20 11,12,16,17 * * 1-5` (UTC) con
+   `ADV_CORE_SYNC_TIMES=13:20,18:20`: tra ora legale e solare parte sempre all'orario italiano
+   giusto, l'esecuzione dell'altra stagione esce subito con codice 0. Il cron di Railway salta un
+   avvio se il precedente è ancora in corso; il lock PostgreSQL resta come seconda protezione.
+4. **IP statici in uscita** (piano Pro) sul solo servizio di sync: Railway assegna 3 IPv4 della
+   regione. Vanno aggiunti all'allowlist di ADV CORE **accanto** all'IP dell'ufficio, che si toglie
+   solo dopo la dismissione del sync locale. Se il servizio cambia regione gli IP cambiano.
+5. **Chiave API dedicata** alla produzione, solo nelle variabili del servizio di sync. La chiave
+   del PC ufficio si revoca quando il sync locale viene dismesso.
+
+### Passaggio dal PC ufficio
+
+1. `pg_dump` del database locale → ripristino su Railway (mai un sync "da zero": si perderebbero
+   modifiche HR, richieste di personale e la base del merge in `adv_core_records`).
+2. Dal PC ufficio, con le variabili `S3_*` del bucket e `DATABASE_URL` di Railway (proxy TCP
+   pubblico): `npm run storage:to-s3 -- --dry-run`, poi `npm run storage:to-s3`. Copia i file con le
+   stesse chiavi e porta i documenti a `S3` solo dopo averne verificato la dimensione; si può
+   rilanciare. Prova con i dati reali (2.144 documenti, 918 MB, verso un S3 locale): 37 s.
+3. Disattivare l'attività pianificata del PC (`registra-sync-adv-core.ps1 -Rimuovi`) prima di
+   attivare il cron su Railway: due sync su due database diversi non si bloccano a vicenda.
 
 ## Come funziona un'esecuzione
 
@@ -112,6 +156,7 @@ Codice in `src/repositories/adv-core/mapping.ts` (funzioni pure, testate).
 | `disponibilita_trasferimento/trasferte`                                                                                                                           | `willing_to_relocate/travel`                   | SI/NO                                                                   |
 | `titolo_studio`                                                                                                                                                   | `candidate_education`                          | solo alla prima importazione                                            |
 | `dati_protetti`                                                                                                                                                   | `protected_category_notes`                     | solo se ADV CORE li espone (decisione legale)                           |
+| `politiche_attive_tipologia`, `politiche_attive_anno`                                                                                                             | `active_policy_participations`                 | una riga con note `ADV Core: <etichetta>`, riallineata a ogni modifica  |
 | CV (`cv[]`)                                                                                                                                                       | `documents` tipo `CV`                          | formati non gestiti (es. `.p7m`) saltati e annotati                     |
 | `denominazione`, `partita_iva`, `codice_fiscale`, `codice_ateco`, `comune`, `provincia_sigla`, `regione`, `email`/`pec`, `telefono`, `informazioni`+`annotazioni` | `companies.*`                                  | `source = ADV_CORE`                                                     |
 
@@ -136,6 +181,41 @@ SELECT started_at, status, stats, error_message FROM adv_core_sync_runs ORDER BY
 3. Corrispondenze in `legacy_mappings`.
 4. Nessuna scrittura su ADV CORE; credenziali solo in variabili d'ambiente.
 5. Nei log solo conteggi e id ADV CORE.
+
+## Estensione API richiesta: allegati di candidati e aziende
+
+Oggi l'API espone solo i CV (`cv[]`). HR ha bisogno anche degli altri allegati, che in ADV CORE
+stanno in `allegati_iscritto` (candidati) e `allegati_azienda` (aziende): Tessera Sanitaria,
+carta d'identità, DRU, Assessment, Privacy, PIP, SGA, PSP, Patto di servizio, **Bilancio delle
+competenze**, job description compilate dalle aziende, ...
+
+Proposta, sullo stesso modello di `cv[]` (sola lettura, stessa chiave e restrizione IP):
+
+- in `candidati.php` e `aziende.php`, un array `allegati[]` per record:
+
+  ```json
+  {
+    "id": 4512,
+    "nome_documento": "BILANCIO DELLE COMPETENZE PILLE PUUSEPP",
+    "numero_documento": null,
+    "rilasciato_da": null,
+    "data_scadenza": null,
+    "tipo_file": "application/pdf",
+    "disponibile": true,
+    "dimensione_bytes": 182344,
+    "file_modificato_il": "2025-08-09 10:12:00",
+    "data_inserimento": "2025-08-09 10:12:00"
+  }
+  ```
+
+  `data_scadenza` `0000-00-00` → `null`; `disponibile` = il file esiste su disco.
+
+- `allegato.php?id=...&tipo=iscritto|azienda`: scarica il file, come il download dei CV.
+- I CV già esposti in `cv[]` non vanno ripetuti in `allegati[]`.
+
+In ADV_HR: ogni allegato diventa un `documents` collegato al candidato o all'azienda, con il
+tipo dedotto dal `nome_documento` (il nome originale resta visibile). Questo abilita il filtro
+"ha il bilancio delle competenze" e la comparsa delle job description delle aziende.
 
 ## Prossimi passi possibili
 

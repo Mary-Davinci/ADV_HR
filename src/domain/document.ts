@@ -11,7 +11,7 @@ export const DOCUMENT_TYPES = [
 ] as const;
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];
 
-export const STORAGE_PROVIDERS = ["LOCAL", "MEMORY"] as const;
+export const STORAGE_PROVIDERS = ["LOCAL", "MEMORY", "S3"] as const;
 export type StorageProvider = (typeof STORAGE_PROVIDERS)[number];
 
 /** Stato di elaborazione (es. futuro parsing CV). Nessun parser è attivo in V1. */

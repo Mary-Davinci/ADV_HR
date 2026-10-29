@@ -9,6 +9,7 @@ import {
   applicationInput,
   changeStageSchema,
   createApplicationSchema,
+  createApplicationsSchema,
   evaluationSchema,
   feedbackSchema,
   interviewInput,
@@ -21,6 +22,12 @@ const revalidateApp = "all" as const;
 export async function createApplicationAction(input: unknown) {
   return runAction(input, { schema: createApplicationSchema, revalidate: revalidateApp }, (values, services) =>
     services.applications.create(values),
+  );
+}
+
+export async function createApplicationsAction(input: unknown) {
+  return runAction(input, { schema: createApplicationsSchema, revalidate: revalidateApp }, (values, services) =>
+    services.applications.createMany({ ...values, source: "ADV_HR" }),
   );
 }
 
@@ -72,5 +79,13 @@ export async function updateInterviewAction(input: unknown) {
     input,
     { schema: interviewInput(interviewSchema), revalidate: revalidateApp },
     ({ interviewId, values }, services) => services.interviews.update(interviewId, values),
+  );
+}
+
+export async function removeApplicationAction(input: unknown) {
+  return runAction(
+    input,
+    { schema: z.object({ applicationId: uuidSchema }), revalidate: revalidateApp },
+    ({ applicationId }, services) => services.applications.remove(applicationId),
   );
 }

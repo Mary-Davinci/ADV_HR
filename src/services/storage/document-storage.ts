@@ -18,7 +18,7 @@ export interface DocumentStorage {
 /** Le chiavi sono generate dal server: accetta solo segmenti sicuri (niente "..", niente path assoluti). */
 const SAFE_KEY = /^[a-z0-9-]+(\/[a-z0-9-]+)*$/;
 
-function assertSafeKey(key: string): void {
+export function assertSafeKey(key: string): void {
   if (!SAFE_KEY.test(key)) throw new Error("Chiave di storage non valida");
 }
 

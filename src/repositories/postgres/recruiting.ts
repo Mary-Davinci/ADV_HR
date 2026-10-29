@@ -334,6 +334,35 @@ export class PostgresApplicationRepository implements ApplicationRepository {
           WHERE ac.candidate_id = ${applications.candidateId}
             AND ac.action IN (${sqlList(CONTACT_ACTIONS)})
         )`.mapWith(activities.createdAt),
+        // Mansione: settore di esperienza ADV CORE, altrimenti l'ultimo ruolo registrato.
+        occupation: sql<string | null>`coalesce(
+          (SELECT nullif(trim(r.payload->>'settore_esperienza'), '') FROM legacy_mappings lm
+             JOIN adv_core_records r ON r.entity_type = lm.entity_type AND r.legacy_id = lm.legacy_id
+             WHERE lm.legacy_system = 'ADV_CORE' AND lm.entity_type = 'CANDIDATE'
+               AND lm.adv_hr_id = ${applications.candidateId} LIMIT 1),
+          (SELECT e.role_title FROM candidate_experiences e WHERE e.candidate_id = ${applications.candidateId}
+             ORDER BY e.end_date DESC NULLS FIRST, e.start_date DESC NULLS LAST LIMIT 1)
+        )`,
+        // Anni dichiarati in ADV CORE (valori non plausibili scartati), altrimenti dalle esperienze.
+        experienceYears: sql<string | null>`coalesce(
+          (SELECT CASE WHEN r.payload->>'esperienza_anni' ~ '^[0-9]{1,2}$' AND (r.payload->>'esperienza_anni')::int <= 50
+                  THEN (r.payload->>'esperienza_anni')::int
+                    + CASE WHEN r.payload->>'esperienza_mesi' ~ '^[0-9]{1,2}$' AND (r.payload->>'esperienza_mesi')::int <= 11
+                           THEN (r.payload->>'esperienza_mesi')::numeric / 12 ELSE 0 END END
+             FROM legacy_mappings lm
+             JOIN adv_core_records r ON r.entity_type = lm.entity_type AND r.legacy_id = lm.legacy_id
+             WHERE lm.legacy_system = 'ADV_CORE' AND lm.entity_type = 'CANDIDATE'
+               AND lm.adv_hr_id = ${applications.candidateId} LIMIT 1),
+          (SELECT nullif(sum(extract(year FROM age(coalesce(e.end_date, current_date), e.start_date)) * 12
+                             + extract(month FROM age(coalesce(e.end_date, current_date), e.start_date))), 0) / 12
+             FROM candidate_experiences e WHERE e.candidate_id = ${applications.candidateId})
+        )`,
+        relatedEvaluations: sql<number>`(SELECT count(*)::int FROM application_evaluations x WHERE x.application_id = ${applications.id})`,
+        relatedFeedbacks: sql<number>`(SELECT count(*)::int FROM feedbacks x WHERE x.application_id = ${applications.id})`,
+        relatedInterviews: sql<number>`(SELECT count(*)::int FROM interviews x WHERE x.application_id = ${applications.id})`,
+        relatedScheduled: sql<number>`(SELECT count(*)::int FROM interviews x
+          WHERE x.application_id = ${applications.id} AND x.status = 'SCHEDULED')`,
+        relatedDocuments: sql<number>`(SELECT count(*)::int FROM documents x WHERE x.application_id = ${applications.id})`,
       })
       .from(applications)
       .innerJoin(candidates, eq(candidates.id, applications.candidateId))
@@ -381,7 +410,13 @@ export class PostgresApplicationRepository implements ApplicationRepository {
       const feedback = latestFeedbacks.get(row.application.id);
       return {
         application: row.application,
-        candidate: { id: row.candidate.id, fullName: getCandidateFullName(row.candidate), city: row.city },
+        candidate: {
+          id: row.candidate.id,
+          fullName: getCandidateFullName(row.candidate),
+          city: row.city,
+          occupation: row.occupation?.trim().slice(0, 120) || null,
+          experienceYears: row.experienceYears === null ? null : Math.round(Number(row.experienceYears) * 10) / 10,
+        },
         selection: { id: row.selection.id, title: row.selection.title, status: row.selection.status },
         company: { id: row.companyId, name: row.companyName },
         stage: row.stage,
@@ -397,6 +432,13 @@ export class PostgresApplicationRepository implements ApplicationRepository {
           : null,
         nextInterviewAt: row.nextInterviewAt ?? null,
         lastContactAt: row.lastContactAt ?? null,
+        related: {
+          evaluations: Number(row.relatedEvaluations),
+          feedbacks: Number(row.relatedFeedbacks),
+          interviews: Number(row.relatedInterviews),
+          scheduledInterviews: Number(row.relatedScheduled),
+          documents: Number(row.relatedDocuments),
+        },
       };
     });
   }
@@ -463,6 +505,11 @@ export class PostgresApplicationRepository implements ApplicationRepository {
 
   async touch(id: EntityId): Promise<void> {
     await this.db.update(applications).set({ updatedAt: new Date() }).where(eq(applications.id, id));
+  }
+
+  async delete(id: EntityId): Promise<boolean> {
+    const rows = await this.db.delete(applications).where(eq(applications.id, id)).returning({ id: applications.id });
+    return rows.length > 0;
   }
 
   async addEvaluation(input: Parameters<ApplicationRepository["addEvaluation"]>[0]): Promise<ApplicationEvaluation> {

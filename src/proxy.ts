@@ -12,6 +12,10 @@ export default auth((request) => {
   const isLoggedIn = Boolean(request.auth?.user);
   const isLoginPage = pathname === "/login";
 
+  // Modulo Job Description per le aziende: niente login, l'accesso è autorizzato
+  // dal token del link personale (verificato nel servizio a ogni richiesta).
+  if (pathname.startsWith("/modulo/")) return NextResponse.next();
+
   if (isLoginPage && isLoggedIn) {
     return NextResponse.redirect(new URL(DEFAULT_AUTHENTICATED_PATH, request.nextUrl));
   }

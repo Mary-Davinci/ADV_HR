@@ -14,10 +14,11 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 
 import type { Database } from "@/repositories/postgres";
-import { LocalFileStorage } from "@/services/storage/document-storage";
+import { indexCandidateCvTexts } from "@/services/cv-text/index-cv-texts";
+import { createDocumentStorage, readStorageConfig } from "@/services/storage/storage-config";
 
 import { createAdvCoreClient } from "./client";
-import { readAdvCoreSyncConfig } from "./config";
+import { isScheduledTimeInItaly, readAdvCoreSyncConfig } from "./config";
 import { closeStaleRuns, runAdvCoreSync } from "./sync";
 
 /** Chiave del lock applicativo PostgreSQL: impedisce due sincronizzazioni contemporanee. */
@@ -25,6 +26,7 @@ const LOCK_KEY = 4_170_201;
 
 async function main(): Promise<number> {
   const config = readAdvCoreSyncConfig(process.env);
+  const storage = createDocumentStorage(readStorageConfig(process.env));
   const trigger = process.argv.includes("--scheduled") ? "SCHEDULED" : "MANUAL";
 
   await mkdir(config.logDir, { recursive: true });
@@ -34,6 +36,15 @@ async function main(): Promise<number> {
     console.log(line);
     void appendFile(logFile, line + "\n").catch(() => undefined);
   };
+
+  if (
+    trigger === "SCHEDULED" &&
+    config.scheduledTimes.length &&
+    !isScheduledTimeInItaly(new Date(), config.scheduledTimes)
+  ) {
+    log(`Fuori orario (previsto ${config.scheduledTimes.join(", ")} ora italiana): esecuzione saltata.`);
+    return 0;
+  }
 
   const pool = new Pool({ connectionString: config.databaseUrl, max: 4 });
   const lockClient = await pool.connect();
@@ -52,7 +63,7 @@ async function main(): Promise<number> {
     const summary = await runAdvCoreSync({
       db,
       client: createAdvCoreClient({ baseUrl: config.apiUrl, apiKey: config.apiKey }),
-      storage: new LocalFileStorage(config.documentStorageDir),
+      storage,
       trigger,
       syncDocuments: config.syncDocuments,
       log,
@@ -60,6 +71,12 @@ async function main(): Promise<number> {
     log(
       `Esito ${summary.status} - ${JSON.stringify(summary.stats)}${summary.errorMessage ? ` - ${summary.errorMessage}` : ""}`,
     );
+    // Testo dei CV nuovi per i candidati suggeriti: un errore qui non cambia l'esito della sincronizzazione.
+    await indexCandidateCvTexts({ db, storage })
+      .then((cv) => log(`Indicizzazione CV: ${JSON.stringify(cv.byStatus)}`))
+      .catch((error: unknown) =>
+        log(`Indicizzazione CV non riuscita: ${error instanceof Error ? error.name : "errore"}`),
+      );
     return summary.status === "SUCCESS" ? 0 : summary.status === "PARTIAL" ? 2 : 1;
   } finally {
     await lockClient.query("SELECT pg_advisory_unlock($1)", [LOCK_KEY]).catch(() => undefined);

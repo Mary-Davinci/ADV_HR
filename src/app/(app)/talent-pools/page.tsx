@@ -1,3 +1,5 @@
+import { FEATURES } from "@/config/features";
+import { notFound } from "next/navigation";
 import { UsersRound } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -14,6 +16,7 @@ import { getServices } from "@/lib/server/services";
 export const metadata: Metadata = { title: "Talent pool" };
 
 export default async function TalentPoolsPage() {
+  if (!FEATURES.talentPools) notFound();
   const user = await requirePermission("talentPool.read");
   const pools = await (await getServices()).talentPools.list();
 

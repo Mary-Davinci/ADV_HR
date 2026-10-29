@@ -4,6 +4,7 @@ export * from "./candidate";
 export * from "./company";
 export * from "./document";
 export * from "./interview";
+export * from "./job-request";
 export * from "./legacy";
 export * from "./matching";
 export * from "./recruiting";

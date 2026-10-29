@@ -59,6 +59,98 @@ describe("PostgreSQL repositories", () => {
     expect(stage.items.map((item) => item.lastName).sort()).toEqual(["Barbieri", "Longo", "Testa"]);
   });
 
+  it("finds candidates by profession in profile, ADV Core data and CV text", async () => {
+    const lastNames = async (query: Parameters<typeof testDb.store.candidates.search>[0]) =>
+      (await testDb.store.candidates.search(query)).items.map((item) => item.lastName).sort();
+
+    expect(await lastNames({ text: "magazzinieri" })).toEqual(["Marchetti", "Pellegrini"]);
+    expect(await lastNames({ sector: "autista" })).toEqual(["Caruso"]);
+
+    const [testa] = (await testDb.store.candidates.search({ text: "Testa" })).items;
+    const [longo] = (await testDb.store.candidates.search({ text: "Longo" })).items;
+    await testDb.db.execute(sql`
+      INSERT INTO legacy_mappings (entity_type, adv_hr_id, legacy_system, legacy_id)
+      VALUES ('CANDIDATE', ${testa!.id}, 'ADV_CORE', 'test-idraulico')`);
+    await testDb.db.execute(sql`
+      INSERT INTO adv_core_records (entity_type, legacy_id, payload)
+      VALUES ('CANDIDATE', 'test-idraulico', ${JSON.stringify({ settore_esperienza: "TERMOIDRAULICA CIVILE" })}::jsonb)`);
+    const document = await testDb.db.execute(sql`
+      INSERT INTO documents (candidate_id, type, filename, storage_provider, storage_key, mime_type)
+      VALUES (${longo!.id}, 'CV', 'cv.pdf', 'MEMORY', 'test/cv-elettricista.pdf', 'application/pdf')
+      RETURNING id`);
+    const documentId = (document as unknown as { rows: Array<{ id: string }> }).rows[0]!.id;
+    await testDb.db.execute(sql`
+      INSERT INTO candidate_document_texts (document_id, candidate_id, status, content)
+      VALUES (${documentId}, ${longo!.id}, 'OK', 'Esperienza come elettricista civile e industriale')`);
+
+    expect(await lastNames({ text: "idraulico" })).toEqual(["Testa"]);
+    expect(await lastNames({ sector: "Idraulica" })).toEqual(["Testa"]);
+    expect(await lastNames({ text: "Elettricista" })).toEqual(["Longo"]);
+  });
+
+  it("matches candidates to a position, profession first and CV mentions after", async () => {
+    const [selection] = (await testDb.store.selections.list({ limit: 1 })).items;
+    const selectionId = selection!.selection.id;
+
+    const warehouse = await testDb.store.candidates.matchPosition({
+      roleKeywords: ["magazziniere"],
+      bonusKeywords: ["inventari"],
+      selectionId,
+      limit: 10,
+    });
+    expect(warehouse.items.map((item) => [item.lastName, item.matchedKeywords, item.roleInProfile])).toEqual([
+      ["Marchetti", ["magazziniere", "inventari"], true],
+      ["Pellegrini", ["magazziniere"], true],
+    ]);
+
+    // Longo cita "elettricista" solo nel CV (inserito nel test precedente).
+    const electrician = await testDb.store.candidates.matchPosition({
+      roleKeywords: ["elettricista"],
+      bonusKeywords: [],
+      selectionId,
+      limit: 10,
+    });
+    expect(electrician.items.map((item) => [item.lastName, item.roleInProfile])).toEqual([["Longo", false]]);
+
+    const marchetti = warehouse.items[0]!;
+    const [application] = await testDb.store.applications.list({ candidateId: marchetti.candidateId });
+    const withMarchetti = await testDb.store.candidates.matchPosition({
+      roleKeywords: ["magazziniere"],
+      bonusKeywords: [],
+      selectionId: application!.selection.id,
+      limit: 10,
+    });
+    expect(withMarchetti.items.find((item) => item.lastName === "Marchetti")?.alreadyInSelection).toBe(true);
+
+    expect(
+      (
+        await testDb.store.candidates.matchPosition({
+          roleKeywords: [],
+          bonusKeywords: ["excel"],
+          selectionId,
+          limit: 10,
+        })
+      ).total,
+    ).toBe(0);
+  });
+
+  it("filters candidates by active policy program and year", async () => {
+    const [galli] = (await testDb.store.candidates.search({ text: "Galli" })).items;
+    const [villa] = (await testDb.store.candidates.search({ text: "Villa" })).items;
+    await testDb.db.execute(sql`
+      INSERT INTO active_policy_participations (candidate_id, program_type, reference_year, notes)
+      VALUES (${galli!.id}, 'GOL', 2025, 'ADV Core: GOL - LOMBARDIA'), (${villa!.id}, 'OTHER', 2026, 'ADV Core: DIL')`);
+    const lastNames = async (query: Parameters<typeof testDb.store.candidates.search>[0]) =>
+      (await testDb.store.candidates.search(query)).items.map((item) => item.lastName).sort();
+
+    const withPolicy = await lastNames({ activePolicy: "ANY" });
+    expect(withPolicy).toEqual(expect.arrayContaining(["Galli", "Villa"]));
+    expect(await lastNames({ activePolicy: "GOL", activePolicyYear: 2025 })).toContain("Galli");
+    expect(await lastNames({ activePolicy: "GOL", activePolicyYear: 2025 })).not.toContain("Villa");
+    expect(await lastNames({ activePolicyYear: 2026 })).toContain("Villa");
+    expect(await lastNames({ activePolicy: "GOL", activePolicyYear: 2026 })).not.toContain("Galli");
+  });
+
   it("treats wildcard characters in user input literally", async () => {
     const result = await testDb.store.candidates.search({ text: "%" });
     expect(result.total).toBe(0);

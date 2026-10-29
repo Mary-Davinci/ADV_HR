@@ -18,6 +18,7 @@ import {
 import { COMPANY_SOURCES } from "../../domain/company";
 import { DOCUMENT_PROCESSING_STATUSES, DOCUMENT_TYPES, STORAGE_PROVIDERS } from "../../domain/document";
 import { FEEDBACK_TYPES, INTERVIEW_STATUSES, INTERVIEW_TYPES } from "../../domain/interview";
+import { JOB_REQUEST_STATUSES } from "../../domain/job-request";
 import {
   ADV_CORE_SYNC_STATUSES,
   ADV_CORE_SYNC_TRIGGERS,
@@ -78,3 +79,4 @@ export const advCoreSyncTriggerEnum = pgEnum("adv_core_sync_trigger", ADV_CORE_S
 export const matchingRequirementCodeEnum = pgEnum("matching_requirement_code", MATCHING_REQUIREMENT_CODES);
 export const matchingEvidenceStatusEnum = pgEnum("matching_evidence_status", MATCHING_EVIDENCE_STATUSES);
 export const matchingOverallStatusEnum = pgEnum("matching_overall_status", MATCHING_OVERALL_STATUSES);
+export const jobRequestStatusEnum = pgEnum("job_request_status", JOB_REQUEST_STATUSES);

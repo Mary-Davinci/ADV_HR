@@ -1,6 +1,7 @@
 import type { DataStore, Repositories } from "../types";
 import { PostgresCandidateRepository, PostgresSkillRepository } from "./candidates";
 import type { Database } from "./db";
+import { PostgresJobRequestRepository } from "./job-requests";
 import {
   PostgresActivityRepository,
   PostgresAuditLogRepository,
@@ -18,6 +19,7 @@ import {
   PostgresStageRepository,
 } from "./recruiting";
 import { PostgresReportRepository } from "./reports";
+import { PostgresCandidateSuggestionRepository } from "./suggestions";
 import { PostgresUserRepository } from "./users";
 
 export type { Database } from "./db";
@@ -30,6 +32,8 @@ export function createPostgresRepositories(db: Database): Repositories {
     companies: new PostgresCompanyRepository(db),
     selections: new PostgresSelectionRepository(db),
     jobDescriptions: new PostgresJobDescriptionRepository(db),
+    jobRequests: new PostgresJobRequestRepository(db),
+    suggestions: new PostgresCandidateSuggestionRepository(db),
     stages: new PostgresStageRepository(db),
     applications: new PostgresApplicationRepository(db),
     interviews: new PostgresInterviewRepository(db),

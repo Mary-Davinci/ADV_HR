@@ -2,12 +2,12 @@
  * Traduzione dei record ADV CORE nel modello ADV_HR e merge a tre vie.
  * Funzioni pure: nessun accesso a database o rete.
  */
-import type { EducationLevel, EmploymentStatus, Gender, WorkMode, WorkTime } from "@/domain";
+import type { ActivePolicyProgram, EducationLevel, EmploymentStatus, Gender, WorkMode, WorkTime } from "@/domain";
 
 import type { AdvCoreCandidate, AdvCoreCompany } from "./client";
 
 /** Da incrementare quando cambia il mapping: forza la rielaborazione di tutti i record. */
-export const MAPPING_VERSION = 1;
+export const MAPPING_VERSION = 3;
 
 export type FieldValue = string | number | boolean | null;
 /** Campi piatti "tabella.campo" (es. "candidate.email", "profile.residenceCity"). */
@@ -147,6 +147,21 @@ export function mapEducationLevel(value: unknown): EducationLevel | null {
   return "OTHER";
 }
 
+/** Prefisso delle note che identifica la politica attiva gestita dalla sincronizzazione. */
+export const ADV_CORE_POLICY_NOTE_PREFIX = "ADV Core: ";
+
+export function mapActivePolicyProgram(value: unknown): ActivePolicyProgram | null {
+  const text = cleanText(value, 100)?.toLowerCase() ?? "";
+  if (!text || /nessun/.test(text)) return null;
+  if (/\bgol\b/.test(text)) return "GOL";
+  if (/\bdil\b/.test(text)) return "DIL";
+  if (/garanzia giovani/.test(text)) return "GARANZIA_GIOVANI";
+  if (/dote unica|\bdul\b/.test(text)) return "DOTE_UNICA_LAVORO";
+  if (/tirocin/.test(text)) return "TIROCINIO";
+  if (/ricolloc/.test(text)) return "ASSEGNO_RICOLLOCAZIONE";
+  return "OTHER";
+}
+
 /* ------------------------------------------------------------------ */
 /* Mapping                                                             */
 /* ------------------------------------------------------------------ */
@@ -155,6 +170,11 @@ export interface MappedCandidate {
   fields: FieldMap;
   /** Titolo di studio: creato solo alla prima importazione (vedi docs). */
   education: { qualification: string; level: EducationLevel } | null;
+  /**
+   * Politica attiva dichiarata in ADV CORE, riallineata a ogni sincronizzazione
+   * (riconosciuta dal prefisso nelle note): quelle inserite in ADV_HR non si toccano.
+   */
+  activePolicy: { programType: ActivePolicyProgram; referenceYear: number; notes: string } | null;
 }
 
 export function mapCandidate(row: AdvCoreCandidate, today: Date): MappedCandidate {
@@ -192,7 +212,28 @@ export function mapCandidate(row: AdvCoreCandidate, today: Date): MappedCandidat
 
   const qualification = cleanText(row.titolo_studio, 200);
   const level = mapEducationLevel(row.titolo_studio);
-  return { fields, education: qualification && level ? { qualification, level } : null };
+  return {
+    fields,
+    education: qualification && level ? { qualification, level } : null,
+    activePolicy: mapActivePolicy(row, today),
+  };
+}
+
+function mapActivePolicy(row: AdvCoreCandidate, today: Date): MappedCandidate["activePolicy"] {
+  const label = cleanText(row.politiche_attive_tipologia, 100);
+  const programType = mapActivePolicyProgram(label);
+  if (!label || !programType) return null;
+  const declared = Number(String(row.politiche_attive_anno ?? "").trim());
+  // Anno mancante o non valido (es. "test"): si usa l'anno di inserimento della scheda.
+  const inserted = normalizeDate(row.data_inserimento, today);
+  const referenceYear =
+    Number.isInteger(declared) && declared >= 2000 && declared <= today.getFullYear() + 1
+      ? declared
+      : inserted
+        ? Number(inserted.slice(0, 4))
+        : null;
+  if (!referenceYear) return null;
+  return { programType, referenceYear, notes: `${ADV_CORE_POLICY_NOTE_PREFIX}${label}` };
 }
 
 export function mapCompany(row: AdvCoreCompany): FieldMap {

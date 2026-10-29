@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  mapActivePolicyProgram,
   mapEducationLevel,
   mapEmploymentStatus,
   mapGender,
@@ -71,6 +72,19 @@ describe("normalizzazione ADV Core", () => {
     expect(mapEducationLevel("Diploma universitario (vecchio ordinamento)")).toBe("MASTER");
     expect(mapEducationLevel("Nessun titolo")).toBeNull();
     expect(mapEducationLevel("Licenza elementare")).toBe("OTHER");
+  });
+});
+
+describe("politiche attive", () => {
+  it("riconosce il programma dall'etichetta ADV Core", () => {
+    expect(mapActivePolicyProgram("GOL - LOMBARDIA")).toBe("GOL");
+    expect(mapActivePolicyProgram("GOL - CALABRIA")).toBe("GOL");
+    expect(mapActivePolicyProgram("DIL")).toBe("DIL");
+    expect(mapActivePolicyProgram("Tirocinio")).toBe("TIROCINIO");
+    expect(mapActivePolicyProgram("Garanzia Giovani")).toBe("GARANZIA_GIOVANI");
+    expect(mapActivePolicyProgram("Altro percorso di politica attiva")).toBe("OTHER");
+    expect(mapActivePolicyProgram(null)).toBeNull();
+    expect(mapActivePolicyProgram("Nessuna")).toBeNull();
   });
 });
 

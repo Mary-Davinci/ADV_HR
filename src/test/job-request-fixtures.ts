@@ -1,0 +1,58 @@
+import type { JobRequestFormValues } from "@/domain";
+
+/** Modulo Job Description compilato correttamente (dati fittizi). */
+export function validJobRequestValues(): JobRequestFormValues {
+  return {
+    company: {
+      name: "Collaudo Meccanica Srl",
+      vatOrFiscalCode: "IT 01234567897",
+      registeredOffice: "Via Roma 1, 24121 Bergamo (BG)",
+      operatingOffice: "Via dell'Industria 25, 24040 Lallio (BG)",
+      phone: "035 1234567",
+      adminEmail: "Amministrazione@Collaudo.example",
+      pec: "collaudo@pec.example.it",
+      sdiCode: "m5uxcr1",
+      contactName: "Giulia Bianchi",
+      contactEmail: "hr@collaudo.example",
+      contactPhone: "+39 333 1234567",
+    },
+    profile: {
+      role: "Operatore macchine CNC",
+      positions: "2",
+      experience: "JUNIOR",
+      city: "Lallio",
+      province: "bg",
+      travel: "false",
+      duties: "Attrezzaggio e conduzione centri di lavoro CNC",
+      activities: "Lettura disegno tecnico, controllo dimensionale",
+      education: "Diploma tecnico",
+      drivingLicense: "B",
+      certifications: "",
+      mandatoryRequirements: "Disponibilità su due turni",
+      expectedHireDate: "2026-11-16",
+    },
+    contract: {
+      type: "FIXED_TERM",
+      fixedTermMonths: "12",
+      otherType: "ignorato perché il tipo non è Altro",
+      ccnl: "Metalmeccanico Industria",
+      level: "C2",
+      monthlySalary: "1.600 - 1.750 € netti",
+      annualSalary: "",
+      benefits: "Buoni pasto",
+      schedule: "FULL",
+      from: "08:00",
+      to: "17:00",
+      weeklyHours: "40",
+      days: ["FRI", "MON", "TUE", "WED", "THU"],
+      holidayWork: "false",
+      onSite: true,
+      smartWorking: false,
+      smartWorkingDays: "",
+    },
+    incentives: { types: ["APPRENTICESHIP"], other: "", expectedHireMonth: "Novembre 2026", notes: "" },
+    documents: { required: ["DID", "UPDATED_CV"], other: "" },
+    companyNotes: "Colloquio in due fasi.",
+    consent: { signatoryName: "Mario Rossi", granted: true },
+  };
+}

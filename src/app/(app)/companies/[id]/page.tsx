@@ -1,4 +1,4 @@
-import { ArrowLeft, Briefcase, Building2 } from "lucide-react";
+import { ArrowLeft, Briefcase, Building2, FileText } from "lucide-react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
@@ -11,6 +11,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { CompanyFormButton, SelectionFormButton } from "@/features/companies/components/company-forms";
 import { SelectionTable } from "@/features/companies/components/selection-table";
 import { DocumentsPanel } from "@/features/documents/components/documents-panel";
+import { CreateJobRequestButton } from "@/features/job-requests/components/create-job-request-button";
+import { JobRequestList } from "@/features/job-requests/components/job-request-list";
 import { can } from "@/lib/auth/permissions";
 import { requirePermission } from "@/lib/auth/session";
 import { formatDateTime } from "@/lib/format";
@@ -20,6 +22,10 @@ import { uuidSchema } from "@/lib/zod-helpers";
 async function load(id: string) {
   if (!uuidSchema.safeParse(id).success) return null;
   return (await getServices()).companies.getDetail(id);
+}
+
+async function loadJobRequests(id: string) {
+  return (await getServices()).jobRequests.listByCompany(id);
 }
 
 export async function generateMetadata({ params }: PageProps<"/companies/[id]">): Promise<Metadata> {
@@ -33,6 +39,7 @@ export default async function CompanyPage({ params, searchParams }: PageProps<"/
   const detail = await load(id);
   if (!detail) notFound();
   const { company, selections, documents, timeline } = detail;
+  const jobRequests = await loadJobRequests(company.id);
   const open = selections.filter(({ selection }) => ["OPEN", "PAUSED"].includes(selection.status)).length;
 
   return (
@@ -51,6 +58,9 @@ export default async function CompanyPage({ params, searchParams }: PageProps<"/
         </div>
         <div className="flex flex-wrap gap-2">
           {can(user, "company.manage") && <CompanyFormButton company={company} />}
+          {can(user, "selection.manage") && (
+            <CreateJobRequestButton companyId={company.id} defaultEmail={company.email ?? ""} />
+          )}
           {can(user, "selection.manage") && <SelectionFormButton companyId={company.id} />}
         </div>
       </header>
@@ -72,6 +82,21 @@ export default async function CompanyPage({ params, searchParams }: PageProps<"/
                 />
               ) : (
                 <SelectionTable items={selections} showCompany={false} />
+              ),
+          },
+          {
+            value: "requests",
+            label: "Richieste di personale",
+            count: jobRequests.length,
+            content:
+              jobRequests.length === 0 ? (
+                <EmptyState
+                  icon={FileText}
+                  title="Nessuna richiesta di personale"
+                  description="Compila il modulo Job Description dell'azienda: la selezione si apre solo dal modulo firmato e verificato."
+                />
+              ) : (
+                <JobRequestList companyId={company.id} items={jobRequests} />
               ),
           },
           {

@@ -77,6 +77,7 @@ export const ACTIVE_POLICY_PROGRAMS = [
   "DOTE_UNICA_LAVORO",
   "TIROCINIO",
   "ASSEGNO_RICOLLOCAZIONE",
+  "DIL",
   "OTHER",
 ] as const;
 export type ActivePolicyProgram = (typeof ACTIVE_POLICY_PROGRAMS)[number];
@@ -263,6 +264,18 @@ export function getTotalExperienceMonths(
   }
   if (current) months += differenceInCalendarMonths(current.end, current.start);
   return months;
+}
+
+/**
+ * Radice di un termine di ricerca professionale (mestiere, settore): toglie la
+ * desinenza così che "idraulico" trovi anche "idraulica" e "termoidraulica",
+ * "elettricista" anche "elettricisti". Termini corti restano invariati.
+ */
+export function professionSearchStem(term: string): string {
+  const word = term.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().trim();
+  if (word.length < 5 || !/^\p{L}+$/u.test(word)) return word;
+  if (/[cg]h[ei]$/.test(word)) return word.slice(0, -2);
+  return word.replace(/[aeiou]$/, "");
 }
 
 export function normalizeSkillName(name: string): string {

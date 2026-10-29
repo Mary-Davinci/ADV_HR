@@ -19,6 +19,12 @@ export const createApplicationSchema = z.object({
   source: z.enum(APPLICATION_SOURCES),
 });
 
+/** Aggiunta in blocco dei candidati compatibili scelti da HR. */
+export const createApplicationsSchema = z.object({
+  selectionId: uuidSchema,
+  candidateIds: z.array(uuidSchema).min(1).max(100),
+});
+
 export const changeStageSchema = z.object({
   applicationId: uuidSchema,
   stageId: uuidSchema,

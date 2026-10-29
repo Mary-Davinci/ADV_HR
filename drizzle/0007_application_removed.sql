@@ -1,0 +1,1 @@
+ALTER TYPE "public"."activity_action" ADD VALUE 'APPLICATION_REMOVED' BEFORE 'PHONE_CALL';

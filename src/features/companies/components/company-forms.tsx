@@ -154,7 +154,7 @@ export function SelectionFormButton({
     onSuccess: ({ id }) => {
       setOpen(false);
       const values = form.getValues();
-      router.push(`/companies/${values.companyId}/selections/${id}?tab=job`);
+      router.push(`/companies/${values.companyId}/selections/${id}?tab=compatible`);
     },
   });
   const update = useActionMutation(updateSelectionAction, {
@@ -193,7 +193,13 @@ export function SelectionFormButton({
             options={companies.map((company) => ({ value: company.id, label: company.name }))}
           />
         )}
-        <TextField<SelectionInput> name="title" label="Titolo della posizione" required maxLength={200} />
+        <TextField<SelectionInput>
+          name="title"
+          label="Titolo della posizione"
+          description="La figura cercata (es. Commerciale, Elettricista): serve a proporre i candidati compatibili."
+          required
+          maxLength={200}
+        />
         <SelectField<SelectionInput>
           name="status"
           label="Stato"

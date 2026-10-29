@@ -1,7 +1,15 @@
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { advCoreRecords, candidates, candidateTags, companies, documents, tags } from "@/db/schema";
+import {
+  activePolicyParticipations,
+  advCoreRecords,
+  candidates,
+  candidateTags,
+  companies,
+  documents,
+  tags,
+} from "@/db/schema";
 import { MemoryStorage } from "@/services/storage/document-storage";
 import { createTestDatabase, type TestDatabase } from "@/test/test-database";
 
@@ -182,9 +190,9 @@ describe("sincronizzazione ADV Core", () => {
       email: "giulia.hr@example.com",
       phone: null,
     });
-  });
+  }, 60_000);
 
-  afterAll(() => testDb.close());
+  afterAll(() => testDb?.close());
 
   it("prima esecuzione: importa aziende, candidati e CV", async () => {
     api.state.companies = [company(1), company(2)];
@@ -266,6 +274,48 @@ describe("sincronizzazione ADV Core", () => {
     // CV invariato: non viene riscaricato.
     expect(api.state.downloads).toBe(downloadsBefore);
     expect(summary.stats.cvUnchanged).toBe(2);
+  });
+
+  it("politiche attive: riallineate a ogni modifica, quelle inserite in ADV_HR restano", async () => {
+    const policiesOf = async (candidateId: string) =>
+      (
+        await testDb.db
+          .select({
+            program: activePolicyParticipations.programType,
+            year: activePolicyParticipations.referenceYear,
+            notes: activePolicyParticipations.notes,
+          })
+          .from(activePolicyParticipations)
+          .where(eq(activePolicyParticipations.candidateId, candidateId))
+      ).sort((a, b) => String(a.notes).localeCompare(String(b.notes)));
+
+    const mario = await candidateByLegacy(101);
+    const marioId = String(mario!.id);
+    await testDb.db
+      .insert(activePolicyParticipations)
+      .values({ candidateId: marioId, programType: "GARANZIA_GIOVANI", referenceYear: 2023, notes: "Inserita da HR" });
+
+    const index = api.state.candidates.findIndex((c) => c.id === 101);
+    const update = (fields: Partial<AdvCoreCandidate>) =>
+      (api.state.candidates[index] = { ...api.state.candidates[index]!, ...fields });
+
+    update({ politiche_attive_tipologia: "GOL - LOMBARDIA", politiche_attive_anno: "2025" });
+    await sync();
+    expect(await policiesOf(marioId)).toEqual([
+      { program: "GOL", year: 2025, notes: "ADV Core: GOL - LOMBARDIA" },
+      { program: "GARANZIA_GIOVANI", year: 2023, notes: "Inserita da HR" },
+    ]);
+
+    update({ politiche_attive_tipologia: "DIL", politiche_attive_anno: "2026" });
+    await sync();
+    expect(await policiesOf(marioId)).toEqual([
+      { program: "DIL", year: 2026, notes: "ADV Core: DIL" },
+      { program: "GARANZIA_GIOVANI", year: 2023, notes: "Inserita da HR" },
+    ]);
+
+    update({ politiche_attive_tipologia: null, politiche_attive_anno: null });
+    await sync();
+    expect(await policiesOf(marioId)).toEqual([{ program: "GARANZIA_GIOVANI", year: 2023, notes: "Inserita da HR" }]);
   });
 
   it("elenco incompleto: nessun record viene segnalato come rimosso", async () => {

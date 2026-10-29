@@ -169,7 +169,8 @@ export interface DocumentRepository {
     storageKey: string;
     mimeType: string;
     sizeBytes: number;
-    uploadedBy: EntityId;
+    /** null = caricato dall'azienda tramite link personale. */
+    uploadedBy: EntityId | null;
   }): Promise<DocumentMetadata>;
   updateProcessingStatus(id: EntityId, status: DocumentProcessingStatus): Promise<void>;
   delete(id: EntityId): Promise<boolean>;

@@ -1,6 +1,8 @@
 import type { EntityId, RoleCode, User, UserRef, UserWithCredentials } from "@/domain";
 
 import type { CandidateRepository, SkillRepository } from "./contracts/candidates";
+import type { JobRequestRepository } from "./contracts/job-requests";
+import type { CandidateSuggestionRepository } from "./contracts/suggestions";
 import type {
   ActivityRepository,
   AuditLogRepository,
@@ -19,6 +21,8 @@ import type {
 } from "./contracts/recruiting";
 
 export * from "./contracts/candidates";
+export * from "./contracts/job-requests";
+export * from "./contracts/suggestions";
 export * from "./contracts/operations";
 export * from "./contracts/recruiting";
 
@@ -63,6 +67,8 @@ export interface Repositories {
   companies: CompanyRepository;
   selections: RecruitmentSelectionRepository;
   jobDescriptions: JobDescriptionRepository;
+  jobRequests: JobRequestRepository;
+  suggestions: CandidateSuggestionRepository;
   stages: RecruitingStageRepository;
   applications: ApplicationRepository;
   interviews: InterviewRepository;

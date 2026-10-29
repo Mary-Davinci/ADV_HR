@@ -69,7 +69,21 @@ export function PipelineTable({ applications, stages, recruiters, interviews, pe
                   >
                     {view.candidate.fullName}
                   </Link>
-                  {view.candidate.city && <p className="text-xs text-muted-foreground">{view.candidate.city}</p>}
+                  <p
+                    className="max-w-72 truncate text-xs text-muted-foreground"
+                    title={view.candidate.occupation ?? undefined}
+                  >
+                    {[
+                      view.candidate.occupation ?? "Mansione non indicata",
+                      view.candidate.experienceYears !== null &&
+                        (view.candidate.experienceYears < 1
+                          ? "meno di 1 anno"
+                          : `${Math.floor(view.candidate.experienceYears)} ${Math.floor(view.candidate.experienceYears) === 1 ? "anno" : "anni"}`),
+                      view.candidate.city,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
                 </TableCell>
                 <TableCell>
                   <StageBadge code={view.stage.code} label={view.stage.label} />
@@ -104,6 +118,7 @@ export function PipelineTable({ applications, stages, recruiters, interviews, pe
                       compact
                       applicationId={view.application.id}
                       candidateName={view.candidate.fullName}
+                      related={view.related}
                       stageId={view.stage.id}
                       stages={stages}
                       interviews={interviews

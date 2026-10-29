@@ -9,6 +9,7 @@ import {
   DOCUMENT_TYPE_LABELS,
   EVALUATION_RESULT_LABELS,
   INTERVIEW_TYPE_LABELS,
+  JOB_REQUEST_STATUS_LABELS,
 } from "@/config/labels";
 import { isContactAction, type Activity } from "@/domain";
 import { cn } from "@/lib/utils";
@@ -26,6 +27,7 @@ const SECTION_LABELS: Record<string, string> = {
   activePolicies: "politiche attive",
   skills: "competenze",
   jobDescription: "job description",
+  jobRequest: "richiesta di personale",
 };
 
 const ENTITY_LABELS: Record<string, string> = {
@@ -48,9 +50,11 @@ export function describeActivity(activity: Activity): { title: string; detail: s
   const meta = activity.metadata;
   switch (activity.action) {
     case "STATUS_CHANGED": {
-      // Le label arrivano dai metadati; per selezioni e task si traducono i codici di stato.
-      const statusLabels: Record<string, string> =
-        activity.entityType === "SELECTION"
+      // Le label arrivano dai metadati; per selezioni, task e richieste di personale si traducono i codici.
+      const jobRequest = asString(meta.jobRequest);
+      const statusLabels: Record<string, string> = jobRequest
+        ? JOB_REQUEST_STATUS_LABELS
+        : activity.entityType === "SELECTION"
           ? SELECTION_STATUS_LABELS
           : activity.entityType === "TASK"
             ? TASK_STATUS_LABELS
@@ -62,7 +66,9 @@ export function describeActivity(activity: Activity): { title: string; detail: s
       const from = asString(meta.fromLabel) ?? code(meta.from);
       const to = asString(meta.toLabel) ?? code(meta.to);
       return {
-        title: `${ENTITY_LABELS[activity.entityType] ?? ""}: stato cambiato`.trim(),
+        title: jobRequest
+          ? `Richiesta di personale ${jobRequest}: stato cambiato`
+          : `${ENTITY_LABELS[activity.entityType] ?? ""}: stato cambiato`.trim(),
         detail: from && to ? `${from} → ${to}` : null,
       };
     }
@@ -70,7 +76,9 @@ export function describeActivity(activity: Activity): { title: string; detail: s
       const section = asString(meta.section);
       return {
         title: `${ENTITY_LABELS[activity.entityType] ?? "Elemento"} aggiornato`,
-        detail: section ? `Sezione: ${SECTION_LABELS[section] ?? section}` : null,
+        detail: section
+          ? `Sezione: ${SECTION_LABELS[section] ?? section}${asString(meta.code) ? ` ${asString(meta.code)}` : ""}`
+          : null,
       };
     }
     case "CREATED":

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import type { Permission } from "@/lib/auth/permissions";
+import { FEATURES } from "./features";
 
 export interface NavItem {
   title: string;
@@ -43,7 +44,9 @@ export const MAIN_NAVIGATION: NavGroup[] = [
       { title: "Selezioni", href: "/selections", icon: Briefcase, permission: "selection.read" },
       { title: "Colloqui", href: "/interviews", icon: MessagesSquare, permission: "interview.read" },
       { title: "Calendario", href: "/calendar", icon: CalendarDays, permission: "interview.read" },
-      { title: "Talent pool", href: "/talent-pools", icon: UsersRound, permission: "talentPool.read" },
+      ...(FEATURES.talentPools
+        ? [{ title: "Talent pool", href: "/talent-pools", icon: UsersRound, permission: "talentPool.read" } as const]
+        : []),
     ],
   },
   {

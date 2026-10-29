@@ -1,3 +1,4 @@
+import { FEATURES } from "@/config/features";
 import { ArrowLeft, UsersRound } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -24,6 +25,7 @@ export async function generateMetadata({ params }: PageProps<"/talent-pools/[id]
 }
 
 export default async function TalentPoolPage({ params }: PageProps<"/talent-pools/[id]">) {
+  if (!FEATURES.talentPools) notFound();
   const user = await requirePermission("talentPool.read");
   const detail = await load((await params).id);
   if (!detail) notFound();

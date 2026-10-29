@@ -88,3 +88,25 @@ export async function runAction<TSchema extends z.ZodType, TResult>(
     return actionError(toUserMessage(error));
   }
 }
+
+/**
+ * Server action PUBBLICA (senza sessione), es. il modulo compilato dall'azienda
+ * tramite link personale: validazione Zod → handler (che verifica il token).
+ * Stessa gestione degli errori di `runAction`, nessuna revalidate.
+ */
+export async function runPublicAction<TSchema extends z.ZodType, TResult>(
+  rawInput: unknown,
+  schema: TSchema,
+  handler: (input: z.output<TSchema>) => Promise<TResult>,
+): Promise<ActionResult<TResult>> {
+  const parsed = schema.safeParse(rawInput);
+  if (!parsed.success) return actionError(parsed.error.issues[0]?.message ?? "Dati non validi.");
+  try {
+    return actionOk(await handler(parsed.data));
+  } catch (error) {
+    if (!(error instanceof DomainRuleError || error instanceof NotFoundError)) {
+      console.error("[public action] errore", describeError(error));
+    }
+    return actionError(toUserMessage(error));
+  }
+}

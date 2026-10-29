@@ -1,5 +1,6 @@
 import type {
   ActivePolicyParticipation,
+  ActivePolicyProgram,
   AvailabilityType,
   Candidate,
   CandidateCertification,
@@ -12,6 +13,7 @@ import type {
   CandidateProfile,
   CandidateSkill,
   DrivingLicenseCategory,
+  EducationLevel,
   EmploymentStatus,
   EntityId,
   Gender,
@@ -50,6 +52,10 @@ export interface CandidateSearchQuery extends PageRequest {
   drivingLicense?: DrivingLicenseCategory;
   language?: string;
   minExperienceMonths?: number;
+  /** Partecipa a una politica attiva: un programma preciso o `"ANY"` (qualsiasi). */
+  activePolicy?: ActivePolicyProgram | "ANY";
+  /** Anno di riferimento della politica attiva (insieme al programma, se indicato). */
+  activePolicyYear?: number;
   /** Stage della candidatura più recente. */
   stageCodes?: string[];
   recruiterId?: EntityId;
@@ -178,6 +184,62 @@ export interface CandidateRepository {
 
   /** Candidati per ricerca rapida (es. aggiunta a selezione o talent pool). */
   lookup(text: string, limit: number): Promise<Array<{ id: EntityId; fullName: string; city: string | null }>>;
+
+  /**
+   * Candidati compatibili con una posizione: hanno almeno una parola della figura
+   * cercata nei dati professionali (profilo, esperienze, competenze, formazione,
+   * dati ADV CORE, testo dei CV). Ordinati per parole della figura, poi requisiti.
+   */
+  matchPosition(query: PositionMatchQuery): Promise<{ total: number; items: PositionMatch[] }>;
+}
+
+export interface PositionMatchQuery {
+  roleKeywords: string[];
+  bonusKeywords: string[];
+  /** Selezione di riferimento: segnala chi è già candidato. */
+  selectionId: EntityId;
+  /** Provincia del luogo di lavoro (sigla): per la vicinanza alla sede. */
+  jobProvince?: string | null;
+  limit: number;
+}
+
+/** Dove è stata trovata la figura cercata, dal dato più affidabile al meno affidabile. */
+export type PositionMatchSource = "EXPERIENCE" | "CV" | "INTEREST" | "DETAILS";
+
+export interface PositionMatch {
+  candidateId: EntityId;
+  firstName: string;
+  lastName: string;
+  city: string | null;
+  province: string | null;
+  /** Parole della posizione trovate nei dati del candidato. */
+  matchedKeywords: string[];
+  /** La figura cercata è il mestiere del candidato (esperienze, settore di esperienza), non solo citata. */
+  roleInProfile: boolean;
+  /** Fonti in cui compare la figura cercata. */
+  roleFoundIn: PositionMatchSource[];
+  /** Requisiti della job description trovati nei dati del candidato. */
+  matchedRequirements: string[];
+  /** Anni di esperienza dichiarati (ADV CORE), null se assenti o non plausibili. */
+  experienceYears: number | null;
+  /** Settore di esperienza e di interesse dichiarati (testo ADV CORE o esperienze). */
+  experienceSector: string | null;
+  interestSector: string | null;
+  educationLevel: EducationLevel | null;
+  drivingLicense: string | null;
+  availableToRelocate: boolean | null;
+  availableToTravel: boolean | null;
+  workMode: string | null;
+  employmentStatus: string | null;
+  sameProvince: boolean;
+  sameRegion: boolean;
+  hasCv: boolean;
+  hasReadableCv: boolean;
+  /** CV più recente (anche se scansionato), per aprirlo dalla lista. */
+  cvDocumentId: EntityId | null;
+  /** Il CV si può aprire nel browser (PDF o immagine); altrimenti si scarica. */
+  cvViewable: boolean;
+  alreadyInSelection: boolean;
 }
 
 export interface SkillRepository {

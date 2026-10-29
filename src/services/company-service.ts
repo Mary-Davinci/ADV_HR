@@ -9,6 +9,10 @@ import type {
 } from "@/repositories/types";
 
 import { changedFields, NotFoundError, nowOf, recordEvent, type ServiceContext } from "./context";
+import { positionKeywords } from "./matching/position-keywords";
+
+/** Candidati compatibili mostrati in una selezione (i più pertinenti per primi). */
+const COMPATIBLE_CANDIDATES_LIMIT = 100;
 
 export function createCompanyService(context: ServiceContext) {
   const { store, actor } = context;
@@ -105,6 +109,35 @@ export function createSelectionService(context: ServiceContext) {
         stages,
         upcomingInterviews: interviews.items,
       };
+    },
+
+    /**
+     * Candidati compatibili con la posizione: parole della figura (titolo della
+     * selezione e della job description) trovate nei dati professionali e nei CV.
+     * Il sistema propone, HR decide chi aggiungere.
+     */
+    async compatibleCandidates(id: EntityId) {
+      assertCan(actor, "selection.read");
+      assertCan(actor, "candidate.read");
+      const selection = await store.selections.getById(id);
+      if (!selection) return null;
+      const [jobDescription, company] = await Promise.all([
+        store.jobDescriptions.getBySelection(id),
+        store.companies.getById(selection.selection.companyId),
+      ]);
+      const keywords = positionKeywords({
+        titles: [selection.selection.title, jobDescription?.title],
+        requirements: [jobDescription?.requirements, jobDescription?.duties],
+        places: [company?.city, jobDescription?.locationCity, selection.companyName],
+      });
+      const { total, items } = await store.candidates.matchPosition({
+        roleKeywords: keywords.role,
+        bonusKeywords: keywords.bonus,
+        selectionId: id,
+        jobProvince: jobDescription?.locationProvince ?? company?.province ?? null,
+        limit: COMPATIBLE_CANDIDATES_LIMIT,
+      });
+      return { keywords, total, items, jobProvince: jobDescription?.locationProvince ?? company?.province ?? null };
     },
 
     async create(input: SelectionInput): Promise<{ id: EntityId }> {

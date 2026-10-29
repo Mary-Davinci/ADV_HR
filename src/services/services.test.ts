@@ -128,6 +128,32 @@ describe("services", () => {
       ).rejects.toThrow("già associato");
     });
 
+    it("adds compatible candidates in bulk, skipping those already in the selection", async () => {
+      const galli = await applicationOf("Galli");
+      const selectionId = galli.selection.id;
+      const members = await testDb.store.applications.list({ selectionId });
+      const memberIds = new Set(members.map((view) => view.candidate.id));
+      const outsider = (await testDb.store.candidates.search({ limit: 50 })).items.find(
+        (item) => !memberIds.has(item.id),
+      );
+
+      const result = await createApplicationService(ctx(actors.recruiter)).createMany({
+        selectionId,
+        candidateIds: [galli.candidate.id, outsider!.id, outsider!.id],
+        source: "ADV_HR",
+      });
+
+      expect(result).toEqual({ added: 1, skipped: 1 });
+      expect((await testDb.store.applications.list({ selectionId })).length).toBe(members.length + 1);
+      await expect(
+        createApplicationService(ctx(actors.viewer)).createMany({
+          selectionId,
+          candidateIds: [outsider!.id],
+          source: "ADV_HR",
+        }),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+    });
+
     it("appends feedback history instead of overwriting", async () => {
       const service = createApplicationService(ctx(actors.recruiter));
       const view = await applicationOf("Ferri");

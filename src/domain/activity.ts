@@ -33,6 +33,7 @@ export const ACTIVITY_ACTIONS = [
   "ADDED_TO_POOL",
   "REMOVED_FROM_POOL",
   "APPLICATION_CREATED",
+  "APPLICATION_REMOVED",
   ...CONTACT_ACTIONS,
 ] as const;
 export type ActivityAction = (typeof ACTIVITY_ACTIONS)[number];

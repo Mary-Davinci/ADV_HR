@@ -17,6 +17,7 @@ import { DocumentsPanel } from "@/features/documents/components/documents-panel"
 import { InterviewList } from "@/features/interviews/components/interview-list";
 import { AddToSelectionButton } from "@/features/recruiting/components/add-application-buttons";
 import { StageBadge } from "@/features/recruiting/components/badges";
+import { FEATURES } from "@/config/features";
 import { PoolMembership } from "@/features/talent-pools/components/pool-membership";
 import { can } from "@/lib/auth/permissions";
 import { requirePermission } from "@/lib/auth/session";
@@ -47,7 +48,7 @@ export default async function CandidatePage({ params, searchParams }: PageProps<
     services.applications.listStages(),
     services.users.listRecruiters(),
     can(user, "application.manage") ? services.selections.options() : Promise.resolve([]),
-    can(user, "talentPool.read") ? services.talentPools.list() : Promise.resolve([]),
+    FEATURES.talentPools && can(user, "talentPool.read") ? services.talentPools.list() : Promise.resolve([]),
   ]);
   const permissions = {
     manage: can(user, "application.manage"),
@@ -138,7 +139,7 @@ export default async function CandidatePage({ params, searchParams }: PageProps<
       label: "Timeline",
       content: (
         <div className="grid gap-6 lg:grid-cols-3">
-          <Card className="lg:col-span-2">
+          <Card className={FEATURES.talentPools ? "lg:col-span-2" : "lg:col-span-3"}>
             <CardHeader>
               <h3 className="text-base font-medium">Attività</h3>
             </CardHeader>
@@ -146,19 +147,21 @@ export default async function CandidatePage({ params, searchParams }: PageProps<
               <Timeline activities={profile.timeline} />
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader>
-              <h3 className="text-base font-medium">Talent pool</h3>
-            </CardHeader>
-            <CardContent>
-              <PoolMembership
-                candidateId={id}
-                memberOf={profile.talentPools}
-                pools={pools.map((pool) => ({ id: pool.id, name: pool.name }))}
-                canManage={can(user, "talentPool.manage")}
-              />
-            </CardContent>
-          </Card>
+          {FEATURES.talentPools && (
+            <Card>
+              <CardHeader>
+                <h3 className="text-base font-medium">Talent pool</h3>
+              </CardHeader>
+              <CardContent>
+                <PoolMembership
+                  candidateId={id}
+                  memberOf={profile.talentPools}
+                  pools={pools.map((pool) => ({ id: pool.id, name: pool.name }))}
+                  canManage={can(user, "talentPool.manage")}
+                />
+              </CardContent>
+            </Card>
+          )}
         </div>
       ),
     },

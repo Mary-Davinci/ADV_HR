@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
+  ACTIVE_POLICY_PROGRAM_LABELS,
   DRIVING_LICENSE_LABELS,
   EMPLOYMENT_STATUS_LABELS,
   optionsOf,
@@ -21,6 +22,7 @@ import {
 import { CANDIDATE_SORT_OPTIONS } from "@/repositories/types";
 
 import {
+  ANY_ACTIVE_POLICY,
   countAdvancedFilters,
   DEFAULT_SORT,
   hasActiveFilters,
@@ -83,8 +85,8 @@ export function CandidateSearchBar({ filters, stages, recruiters }: CandidateSea
         <SearchInput
           value={search}
           onValueChange={setSearch}
-          label="Cerca per nome, cognome, codice fiscale, email o città"
-          placeholder="Nome, codice fiscale, email, città…"
+          label="Cerca per nome, codice fiscale, email, città o professione (anche nei CV)"
+          placeholder="Nome, città, professione (es. elettricista)…"
           className="xl:max-w-sm xl:flex-1"
         />
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
@@ -183,6 +185,8 @@ type AdvancedValues = Pick<
   | "workTime"
   | "license"
   | "minExp"
+  | "policy"
+  | "policyYear"
 >;
 
 const EMPTY_ADVANCED: AdvancedValues = {
@@ -198,6 +202,8 @@ const EMPTY_ADVANCED: AdvancedValues = {
   workTime: undefined,
   license: undefined,
   minExp: undefined,
+  policy: undefined,
+  policyYear: undefined,
 };
 
 function pickAdvanced(filters: CandidateFilters): AdvancedValues {
@@ -310,10 +316,10 @@ function AdvancedFiltersSheet({
               placeholder="es. Excel"
             />
             <TextFilter
-              label="Settore"
+              label="Settore o professione"
               value={values.sector}
               onChange={(v) => set("sector", v)}
-              placeholder="es. Logistica"
+              placeholder="es. Elettricista, Idraulico, Logistica"
             />
             <TextFilter
               label="Lingua"
@@ -339,6 +345,33 @@ function AdvancedFiltersSheet({
               options={optionsOf(DRIVING_LICENSE_LABELS)}
               onChange={(v) => set("license", v as AdvancedValues["license"])}
             />
+          </fieldset>
+          <fieldset className="grid gap-3">
+            <legend className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              Politiche attive
+            </legend>
+            <SelectFilter
+              label="Programma"
+              value={values.policy}
+              options={[
+                { value: ANY_ACTIVE_POLICY, label: "Qualsiasi politica attiva" },
+                ...optionsOf(ACTIVE_POLICY_PROGRAM_LABELS),
+              ]}
+              onChange={(v) => set("policy", v as AdvancedValues["policy"])}
+            />
+            <div className="grid gap-1.5">
+              <Label htmlFor="policy-year">Anno della politica attiva</Label>
+              <Input
+                id="policy-year"
+                type="number"
+                min={2000}
+                max={2100}
+                placeholder="es. 2025"
+                value={values.policyYear ?? ""}
+                onChange={(event) => set("policyYear", event.target.value ? Number(event.target.value) : undefined)}
+                className="h-9"
+              />
+            </div>
           </fieldset>
           <fieldset className="grid gap-3">
             <legend className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">

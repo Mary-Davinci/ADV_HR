@@ -27,10 +27,12 @@ import {
   CONTACT_ACTIONS,
   getCandidateFullName,
   normalizeSkillName,
+  professionSearchStem,
   type Candidate,
   type CandidatePreferences,
   type CandidateProfile,
   type CandidateSkill,
+  type EducationLevel,
   type EntityId,
   type Page,
   type Skill,
@@ -48,9 +50,12 @@ import type {
   CandidateRepository,
   CandidateSearchQuery,
   CandidateSkillInput,
+  PositionMatch,
+  PositionMatchQuery,
+  PositionMatchSource,
   SkillRepository,
 } from "../types";
-import { containsText, pageBounds, searchTerms, sqlList, toCount, type Database } from "./db";
+import { containsText, escapeLike, pageBounds, searchTerms, sqlList, toCount, type Database } from "./db";
 
 /* ------------------------------------------------------------------ */
 /* Mapping                                                              */
@@ -155,6 +160,115 @@ const experienceMonths = sql<number>`(
   ), 0) FROM candidate_experiences e WHERE e.candidate_id = ${candidates.id}
 )`;
 
+/**
+ * Grandi gruppi della classificazione ISTAT delle professioni: ADV CORE li mette in
+ * `profilo_professionale` (copiato in `professional_summary`). Sono troppo generici per
+ * dire che mestiere fa il candidato ("Professioni qualificate nelle attività commerciali
+ * e nei servizi" non significa "commerciale"): non vengono usati nelle ricerche.
+ */
+const ISTAT_MACRO_GROUPS_SQL = `(
+  'legislatori, imprenditori e alta dirigenza',
+  'professioni intellettuali, scientifiche e di elevata specializzazione',
+  'professioni tecniche',
+  'impiegati',
+  'professioni qualificate nelle attivita commerciali e nei servizi',
+  'artigiani, operai specializzati e agricoltori',
+  'conduttori di impianti e conducenti di veicoli',
+  'professioni non qualificate',
+  'forze armate',
+  'nessuno'
+)`;
+
+/** Profilo testuale del candidato, senza la categoria ISTAT generica (alias `p` = profilo). */
+const MEANINGFUL_SUMMARY_SQL = `CASE WHEN lower(unaccent(trim(p.professional_summary))) IN ${ISTAT_MACRO_GROUPS_SQL}
+  THEN NULL ELSE p.professional_summary END`;
+
+/** Il candidato arriva da ADV CORE (alias `adv` = record ADV CORE): lì il profilo è una nota libera, non un mestiere. */
+const FROM_ADV_CORE_SQL = `adv.payload IS NOT NULL`;
+
+/**
+ * Campi ADV CORE non mappati in colonne ma utili a trovare mestiere e settore.
+ * `profilo_professionale` è escluso: è già in `professional_summary` e va filtrato (vedi sopra).
+ */
+const ADV_CORE_PROFESSION_FIELDS = [
+  "settore_esperienza",
+  "settore_interesse",
+  "titolo_studio",
+  "certificazioni",
+  "competenze_informatiche",
+  "note_colloquio",
+] as const;
+
+/** Nomi di campo costanti (nessun input utente): sicuri come SQL letterale. */
+const ADV_CORE_PROFESSION_SQL = `concat_ws(' ', ${ADV_CORE_PROFESSION_FIELDS.map((field) => `r.payload->>'${field}'`).join(", ")})`;
+const advCoreProfessionText = sql.raw(ADV_CORE_PROFESSION_SQL);
+
+/**
+ * Il candidato ha il termine (mestiere, settore, competenza) in uno qualsiasi dei
+ * dati professionali: profilo, esperienze, interessi, competenze, formazione,
+ * certificazioni, dati ricevuti da ADV CORE e testo estratto dai CV.
+ */
+function matchesProfession(term: string): SQL {
+  const pattern = `%${escapeLike(professionSearchStem(term))}%`;
+  const like = (text: SQL) => sql`unaccent(coalesce(${text}, '')) ILIKE unaccent(${pattern})`;
+  return sql`(
+    ${like(sql`CASE WHEN lower(unaccent(trim(${candidateProfiles.professionalSummary}))) IN ${sql.raw(ISTAT_MACRO_GROUPS_SQL)}
+      THEN NULL ELSE ${candidateProfiles.professionalSummary} END`)}
+    OR EXISTS (SELECT 1 FROM candidate_experiences e WHERE e.candidate_id = ${candidates.id}
+      AND ${like(sql`concat_ws(' ', e.role_title, e.sector, e.description)`)})
+    OR EXISTS (SELECT 1 FROM candidate_interests ci WHERE ci.candidate_id = ${candidates.id} AND ${like(sql`ci.sector`)})
+    OR EXISTS (SELECT 1 FROM candidate_skills cs JOIN skills sk ON sk.id = cs.skill_id
+      WHERE cs.candidate_id = ${candidates.id} AND ${like(sql`sk.name`)})
+    OR EXISTS (SELECT 1 FROM candidate_education ed WHERE ed.candidate_id = ${candidates.id}
+      AND ${like(sql`concat_ws(' ', ed.qualification, ed.field_of_study)`)})
+    OR EXISTS (SELECT 1 FROM candidate_certifications cc WHERE cc.candidate_id = ${candidates.id} AND ${like(sql`cc.name`)})
+    OR EXISTS (SELECT 1 FROM legacy_mappings lm
+      JOIN adv_core_records r ON r.entity_type = lm.entity_type AND r.legacy_id = lm.legacy_id
+      WHERE lm.legacy_system = 'ADV_CORE' AND lm.entity_type = 'CANDIDATE' AND lm.adv_hr_id = ${candidates.id}
+      AND ${like(advCoreProfessionText)})
+    OR EXISTS (SELECT 1 FROM candidate_document_texts dt WHERE dt.candidate_id = ${candidates.id} AND ${like(sql`dt.content`)})
+  )`;
+}
+
+/*
+ * Testo professionale di un candidato (alias `c` = candidato, `p` = profilo) diviso per
+ * affidabilità, per confrontare molte parole in una passata:
+ * - "esperienza": ruoli e settori delle esperienze, settore di esperienza ADV CORE e il profilo
+ *   dei candidati inseriti in ADV_HR (cosa ha fatto davvero il candidato);
+ * - "interesse": settori di interesse dichiarati (cosa vorrebbe fare);
+ * - "dettagli": descrizioni, competenze, formazione, certificazioni, note e profilo ADV CORE;
+ * - "cv": testo estratto dai CV.
+ * Richiedono gli alias `c` (candidato), `p` (profilo) e `adv` (record ADV CORE, anche assente).
+ */
+
+const professionExperienceText = sql.raw(`concat_ws(' ',
+  CASE WHEN ${FROM_ADV_CORE_SQL} THEN NULL ELSE ${MEANINGFUL_SUMMARY_SQL} END,
+  (SELECT string_agg(concat_ws(' ', e.role_title, e.sector), ' ') FROM candidate_experiences e WHERE e.candidate_id = c.id),
+  adv.payload->>'settore_esperienza'
+)`);
+
+const professionInterestText = sql.raw(`concat_ws(' ',
+  (SELECT string_agg(ci.sector, ' ') FROM candidate_interests ci WHERE ci.candidate_id = c.id),
+  adv.payload->>'settore_interesse'
+)`);
+
+const professionDetailText = sql.raw(`concat_ws(' ',
+  CASE WHEN ${FROM_ADV_CORE_SQL} THEN ${MEANINGFUL_SUMMARY_SQL} END,
+  (SELECT string_agg(e.description, ' ') FROM candidate_experiences e WHERE e.candidate_id = c.id),
+  (SELECT string_agg(sk.name, ' ') FROM candidate_skills cs JOIN skills sk ON sk.id = cs.skill_id WHERE cs.candidate_id = c.id),
+  (SELECT string_agg(concat_ws(' ', ed.qualification, ed.field_of_study), ' ') FROM candidate_education ed WHERE ed.candidate_id = c.id),
+  (SELECT string_agg(cc.name, ' ') FROM candidate_certifications cc WHERE cc.candidate_id = c.id),
+  adv.payload->>'titolo_studio', adv.payload->>'certificazioni',
+  adv.payload->>'competenze_informatiche', adv.payload->>'note_colloquio'
+)`);
+
+const professionCvText = sql.raw(
+  `(SELECT string_agg(dt.content, ' ') FROM candidate_document_texts dt WHERE dt.candidate_id = c.id)`,
+);
+
+/** Sotto questa lunghezza un termine libero cerca solo nei dati anagrafici (evita risultati rumorosi). */
+const MIN_PROFESSION_TERM_LENGTH = 3;
+
 function buildConditions(query: CandidateSearchQuery): SQL[] {
   const conditions: SQL[] = [];
 
@@ -165,6 +279,7 @@ function buildConditions(query: CandidateSearchQuery): SQL[] {
       containsText(candidates.fiscalCode, term),
       containsText(candidates.email, term),
       containsText(candidateProfiles.residenceCity, term),
+      term.length >= MIN_PROFESSION_TERM_LENGTH ? matchesProfession(term) : undefined,
     );
     if (clause) conditions.push(clause);
   }
@@ -193,13 +308,8 @@ function buildConditions(query: CandidateSearchQuery): SQL[] {
       WHERE cs.candidate_id = ${candidates.id} AND sk.normalized_name ILIKE ${`%${normalized}%`}
     )`);
   }
-  if (query.sector) {
-    const pattern = `%${query.sector}%`;
-    conditions.push(sql`(
-      EXISTS (SELECT 1 FROM candidate_experiences e WHERE e.candidate_id = ${candidates.id} AND unaccent(e.sector) ILIKE unaccent(${pattern}))
-      OR EXISTS (SELECT 1 FROM candidate_interests ci WHERE ci.candidate_id = ${candidates.id} AND unaccent(ci.sector) ILIKE unaccent(${pattern}))
-    )`);
-  }
+  // "Settore o professione": ogni parola deve comparire nei dati professionali.
+  for (const term of searchTerms(query.sector)) conditions.push(matchesProfession(term));
   if (query.drivingLicense) {
     conditions.push(sql`EXISTS (
       SELECT 1 FROM candidate_driving_licenses dl
@@ -210,6 +320,14 @@ function buildConditions(query: CandidateSearchQuery): SQL[] {
     conditions.push(sql`EXISTS (
       SELECT 1 FROM candidate_languages l
       WHERE l.candidate_id = ${candidates.id} AND lower(l.language) = lower(${query.language})
+    )`);
+  }
+  if (query.activePolicy || query.activePolicyYear) {
+    const program = query.activePolicy && query.activePolicy !== "ANY" ? query.activePolicy : null;
+    conditions.push(sql`EXISTS (
+      SELECT 1 FROM active_policy_participations ap WHERE ap.candidate_id = ${candidates.id}
+      ${program ? sql`AND ap.program_type = ${program}` : sql``}
+      ${query.activePolicyYear ? sql`AND ap.reference_year = ${query.activePolicyYear}` : sql``}
     )`);
   }
   if (query.minExperienceMonths !== undefined && query.minExperienceMonths > 0) {
@@ -580,6 +698,171 @@ export class PostgresCandidateRepository implements CandidateRepository {
     return rows.length > 0;
   }
 
+  async matchPosition(query: PositionMatchQuery): Promise<{ total: number; items: PositionMatch[] }> {
+    if (query.roleKeywords.length === 0) return { total: 0, items: [] };
+    const keywords = [
+      ...query.roleKeywords.map((word) => ({ word, role: true })),
+      ...query.bonusKeywords.map((word) => ({ word, role: false })),
+    ].map(({ word, role }) => {
+      const stem = professionSearchStem(word);
+      // "commerciale" vale per commerciale/commerciali, non per commercialista o commercializzazione.
+      const exact = `\\m${stem.replace(/[^a-z0-9]/g, "")}[a-z]{0,2}\\M`;
+      return { word, role, pattern: `%${escapeLike(stem)}%`, exact };
+    });
+    const jobProvince = query.jobProvince?.trim().toUpperCase() || null;
+
+    const result = (await this.db.execute(sql`
+      WITH kw AS (
+        SELECT t.k->>'word' AS word, t.k->>'pattern' AS pattern, t.k->>'exact' AS exact,
+               (t.k->>'role')::boolean AS role, t.ord
+        FROM jsonb_array_elements(${JSON.stringify(keywords)}::jsonb) WITH ORDINALITY AS t(k, ord)
+      ),
+      removed AS (
+        SELECT ct.candidate_id FROM candidate_tags ct JOIN tags tg ON tg.id = ct.tag_id WHERE tg.slug = 'adv-core-rimosso'
+      ),
+      job_region AS (
+        SELECT p.residence_region AS region FROM candidate_profiles p
+        WHERE upper(p.residence_province) = ${jobProvince} AND p.residence_region IS NOT NULL
+        GROUP BY p.residence_region ORDER BY count(*) DESC LIMIT 1
+      ),
+      prof AS MATERIALIZED (
+        SELECT c.id,
+               lower(unaccent(coalesce(${professionExperienceText}, ''))) AS exp,
+               lower(unaccent(coalesce(${professionInterestText}, ''))) AS interest,
+               lower(unaccent(coalesce(${professionDetailText}, ''))) AS detail,
+               lower(unaccent(coalesce(${professionCvText}, ''))) AS cv
+        FROM candidates c
+        LEFT JOIN candidate_profiles p ON p.candidate_id = c.id
+        LEFT JOIN LATERAL (
+          SELECT r.payload FROM legacy_mappings lm
+          JOIN adv_core_records r ON r.entity_type = lm.entity_type AND r.legacy_id = lm.legacy_id
+          WHERE lm.legacy_system = 'ADV_CORE' AND lm.entity_type = 'CANDIDATE' AND lm.adv_hr_id = c.id
+          LIMIT 1
+        ) adv ON true
+        WHERE c.id NOT IN (SELECT candidate_id FROM removed)
+      ),
+      found AS (
+        SELECT prof.id, kw.word, kw.ord, kw.role,
+               prof.exp LIKE kw.pattern AS in_exp, prof.exp ~ kw.exact AS exact_exp, prof.cv LIKE kw.pattern AS in_cv,
+               prof.interest LIKE kw.pattern AS in_interest, prof.detail LIKE kw.pattern AS in_detail
+        FROM prof JOIN kw ON prof.exp LIKE kw.pattern OR prof.cv LIKE kw.pattern
+                          OR prof.interest LIKE kw.pattern OR prof.detail LIKE kw.pattern
+      ),
+      hits AS MATERIALIZED (
+        SELECT id,
+               array_agg(word ORDER BY ord) AS matched,
+               coalesce(array_agg(word ORDER BY ord) FILTER (WHERE NOT role), '{}') AS requirements,
+               bool_or(role AND in_exp) AS role_exp, bool_or(role AND exact_exp) AS role_exact,
+               bool_or(role AND in_cv) AS role_cv,
+               bool_or(role AND in_interest) AS role_interest, bool_or(role AND in_detail) AS role_detail,
+               count(*) FILTER (WHERE role) AS role_hits, count(*) FILTER (WHERE NOT role) AS requirement_hits
+        FROM found GROUP BY id HAVING bool_or(role)
+      ),
+      enriched AS MATERIALIZED (
+        SELECT h.*, c.first_name, c.last_name, c.id AS candidate_id,
+               pr.residence_city, pr.residence_province,
+               coalesce(upper(pr.residence_province) = ${jobProvince}, false) AS same_province,
+               coalesce(pr.residence_region = (SELECT region FROM job_region), false) AS same_region,
+               adv.payload,
+               -- Anni dichiarati in ADV CORE (valori non plausibili scartati), altrimenti dalle esperienze.
+               coalesce(
+                 CASE WHEN adv.payload->>'esperienza_anni' ~ '^[0-9]{1,2}$' AND (adv.payload->>'esperienza_anni')::int <= 50
+                      THEN (adv.payload->>'esperienza_anni')::int
+                        + CASE WHEN adv.payload->>'esperienza_mesi' ~ '^[0-9]{1,2}$' AND (adv.payload->>'esperienza_mesi')::int <= 11
+                               THEN (adv.payload->>'esperienza_mesi')::numeric / 12 ELSE 0 END END,
+                 nullif((SELECT sum(extract(year FROM age(coalesce(e.end_date, current_date), e.start_date)) * 12
+                                   + extract(month FROM age(coalesce(e.end_date, current_date), e.start_date)))
+                         FROM candidate_experiences e WHERE e.candidate_id = c.id), 0) / 12
+               ) AS years,
+               coalesce(nullif(trim(adv.payload->>'settore_esperienza'), ''),
+                 (SELECT string_agg(DISTINCT e.role_title, ', ') FROM candidate_experiences e WHERE e.candidate_id = c.id)
+               ) AS experience_sector,
+               coalesce(nullif(trim(adv.payload->>'settore_interesse'), ''),
+                 (SELECT string_agg(DISTINCT ci.sector, ', ') FROM candidate_interests ci WHERE ci.candidate_id = c.id)
+               ) AS interest_sector,
+               (SELECT (array_agg(ed.level ORDER BY array_position(
+                   ARRAY['LOWER_SECONDARY','VOCATIONAL','UPPER_SECONDARY','POST_SECONDARY','BACHELOR','MASTER','DOCTORATE']::text[],
+                   ed.level::text) DESC NULLS LAST))[1]
+                FROM candidate_education ed WHERE ed.candidate_id = c.id) AS education_level,
+               EXISTS (SELECT 1 FROM documents d WHERE d.candidate_id = c.id AND d.type = 'CV') AS has_cv,
+               (SELECT d.id FROM documents d WHERE d.candidate_id = c.id AND d.type = 'CV'
+                 ORDER BY (EXISTS (SELECT 1 FROM candidate_document_texts t WHERE t.document_id = d.id AND t.status = 'OK')) DESC,
+                          d.created_at DESC LIMIT 1) AS cv_document_id,
+               (SELECT d.mime_type FROM documents d WHERE d.candidate_id = c.id AND d.type = 'CV'
+                 ORDER BY (EXISTS (SELECT 1 FROM candidate_document_texts t WHERE t.document_id = d.id AND t.status = 'OK')) DESC,
+                          d.created_at DESC LIMIT 1) AS cv_mime_type,
+               EXISTS (SELECT 1 FROM candidate_document_texts t WHERE t.candidate_id = c.id AND t.status = 'OK') AS has_readable_cv,
+               EXISTS (SELECT 1 FROM applications a WHERE a.candidate_id = c.id AND a.selection_id = ${query.selectionId})
+                 AS in_selection
+        FROM hits h
+        JOIN candidates c ON c.id = h.id
+        LEFT JOIN candidate_profiles pr ON pr.candidate_id = c.id
+        LEFT JOIN LATERAL (
+          SELECT r.payload FROM legacy_mappings lm
+          JOIN adv_core_records r ON r.entity_type = lm.entity_type AND r.legacy_id = lm.legacy_id
+          WHERE lm.legacy_system = 'ADV_CORE' AND lm.entity_type = 'CANDIDATE' AND lm.adv_hr_id = c.id
+          LIMIT 1
+        ) adv ON true
+      )
+      SELECT e.*, count(*) OVER ()::int AS total
+      FROM enriched e
+      -- Ordine dichiarato a HR: dove compare la figura (esperienza con la parola esatta > esperienza
+      -- con parola simile > CV > interesse > altri dati),
+      -- fascia di esperienza (5+ anni, 2-4, 1), vicinanza alla sede (provincia, regione),
+      -- requisiti trovati, poi anni esatti e CV leggibile. Nessun criterio legato alla data di modifica.
+      ORDER BY
+        CASE WHEN e.role_exact THEN 4 WHEN e.role_exp THEN 3 WHEN e.role_cv THEN 2 WHEN e.role_interest THEN 1 ELSE 0 END DESC,
+        CASE WHEN e.years >= 5 THEN 3 WHEN e.years >= 2 THEN 2 WHEN e.years >= 1 THEN 1 ELSE 0 END DESC,
+        (e.same_province::int * 2 + e.same_region::int) DESC,
+        e.requirement_hits DESC, e.role_hits DESC, e.years DESC NULLS LAST, e.has_readable_cv DESC,
+        e.last_name, e.first_name, e.candidate_id
+      LIMIT ${query.limit}
+    `)) as unknown as { rows: PositionMatchRow[] };
+
+    const yesNo = (value: unknown) => (value === "SI" ? true : value === "NO" ? false : null);
+    const text = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : null);
+
+    return {
+      total: toCount(result.rows[0]?.total ?? 0),
+      items: result.rows.map((row) => {
+        const roleFoundIn: PositionMatchSource[] = [];
+        if (row.role_exp) roleFoundIn.push("EXPERIENCE");
+        if (row.role_cv) roleFoundIn.push("CV");
+        if (row.role_interest) roleFoundIn.push("INTEREST");
+        if (row.role_detail) roleFoundIn.push("DETAILS");
+        const payload = row.payload ?? {};
+        const license = text(payload.patente);
+        return {
+          candidateId: row.candidate_id,
+          firstName: row.first_name,
+          lastName: row.last_name,
+          city: row.residence_city,
+          province: row.residence_province,
+          matchedKeywords: row.matched,
+          roleInProfile: row.role_exp,
+          roleFoundIn,
+          matchedRequirements: row.requirements,
+          experienceYears: row.years === null ? null : Math.round(Number(row.years) * 10) / 10,
+          experienceSector: row.experience_sector?.slice(0, 160) ?? null,
+          interestSector: row.interest_sector?.slice(0, 160) ?? null,
+          educationLevel: row.education_level,
+          drivingLicense: license && license !== "Nessuna" ? license : null,
+          availableToRelocate: yesNo(payload.disponibilita_trasferimento),
+          availableToTravel: yesNo(payload.disponibilita_trasferte),
+          workMode: text(payload.modalita_lavoro),
+          employmentStatus: text(payload.stato_occupazionale),
+          sameProvince: row.same_province,
+          sameRegion: row.same_region,
+          hasCv: row.has_cv,
+          hasReadableCv: row.has_readable_cv,
+          cvDocumentId: row.cv_document_id,
+          cvViewable: ["application/pdf", "image/jpeg", "image/png"].includes(row.cv_mime_type ?? ""),
+          alreadyInSelection: row.in_selection,
+        };
+      }),
+    };
+  }
+
   async lookup(text: string, limit: number) {
     const terms = searchTerms(text);
     const conditions = terms.flatMap((term) => {
@@ -599,6 +882,34 @@ export class PostgresCandidateRepository implements CandidateRepository {
       .limit(Math.min(limit, 50));
     return rows.map((row) => ({ id: row.candidate.id, fullName: getCandidateFullName(row.candidate), city: row.city }));
   }
+}
+
+interface PositionMatchRow {
+  candidate_id: string;
+  first_name: string;
+  last_name: string;
+  residence_city: string | null;
+  residence_province: string | null;
+  same_province: boolean;
+  same_region: boolean;
+  payload: Record<string, unknown> | null;
+  years: string | number | null;
+  experience_sector: string | null;
+  interest_sector: string | null;
+  education_level: EducationLevel | null;
+  matched: string[];
+  requirements: string[];
+  role_exp: boolean;
+  role_exact: boolean;
+  role_cv: boolean;
+  role_interest: boolean;
+  role_detail: boolean;
+  has_cv: boolean;
+  has_readable_cv: boolean;
+  cv_document_id: string | null;
+  cv_mime_type: string | null;
+  in_selection: boolean;
+  total: number;
 }
 
 function toCandidateSkill(

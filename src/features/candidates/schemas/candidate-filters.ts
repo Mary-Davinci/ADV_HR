@@ -1,7 +1,14 @@
 import { endOfDay, endOfWeek, startOfDay, startOfWeek } from "date-fns";
 import { z } from "zod";
 
-import { DRIVING_LICENSE_CATEGORIES, EMPLOYMENT_STATUSES, REVIEW_STAGE_CODES, WORK_MODES, WORK_TIMES } from "@/domain";
+import {
+  ACTIVE_POLICY_PROGRAMS,
+  DRIVING_LICENSE_CATEGORIES,
+  EMPLOYMENT_STATUSES,
+  REVIEW_STAGE_CODES,
+  WORK_MODES,
+  WORK_TIMES,
+} from "@/domain";
 import { CANDIDATE_SORT_OPTIONS, type CandidateSearchQuery, type CandidateSort } from "@/repositories/types";
 
 export const INTERVIEW_WINDOWS = ["today", "week", "upcoming", "none"] as const;
@@ -22,6 +29,9 @@ export const SORT_LABELS: Record<CandidateSort, string> = {
 };
 
 export const DEFAULT_SORT: CandidateSort = "updatedAt_desc";
+
+/** Valore del filtro "politica attiva" che accetta qualsiasi programma. */
+export const ANY_ACTIVE_POLICY = "ANY";
 
 /** Gruppo di stage selezionabile come filtro unico. */
 export const PENDING_REVIEW_FILTER = "PENDING_REVIEW";
@@ -55,6 +65,8 @@ export const candidateFiltersSchema = z.object({
   workTime: oneOf(WORK_TIMES),
   license: oneOf(DRIVING_LICENSE_CATEGORIES),
   minExp: z.preprocess(firstValue, z.coerce.number().int().min(1).max(40).optional()).catch(undefined),
+  policy: oneOf([ANY_ACTIVE_POLICY, ...ACTIVE_POLICY_PROGRAMS] as const),
+  policyYear: z.preprocess(firstValue, z.coerce.number().int().min(2000).max(2100).optional()).catch(undefined),
   stage: z
     .preprocess(
       firstValue,
@@ -85,6 +97,8 @@ export const ADVANCED_FILTER_KEYS = [
   "workTime",
   "license",
   "minExp",
+  "policy",
+  "policyYear",
 ] as const satisfies ReadonlyArray<keyof CandidateFilters>;
 
 export function parseCandidateFilters(searchParams: Record<string, string | string[] | undefined>): CandidateFilters {
@@ -119,6 +133,8 @@ export function toCandidateSearchQuery(filters: CandidateFilters, now: Date): Ca
     workTime: filters.workTime,
     drivingLicense: filters.license,
     minExperienceMonths: filters.minExp ? filters.minExp * 12 : undefined,
+    activePolicy: filters.policy,
+    activePolicyYear: filters.policyYear,
     stageCodes: filters.stage
       ? filters.stage === PENDING_REVIEW_FILTER
         ? [...REVIEW_STAGE_CODES]

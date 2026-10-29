@@ -80,7 +80,7 @@ export function TextField<T extends FieldValues>({
   autoComplete,
   maxLength,
 }: BaseProps<T> & {
-  type?: "text" | "email" | "tel" | "url" | "date" | "datetime-local" | "number" | "password";
+  type?: "text" | "email" | "tel" | "url" | "date" | "time" | "datetime-local" | "number" | "password";
   placeholder?: string;
   autoComplete?: string;
   maxLength?: number;

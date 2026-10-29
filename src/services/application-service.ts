@@ -59,7 +59,7 @@ export function createApplicationService(context: ServiceContext) {
     return evaluation;
   }
 
-  return {
+  const service = {
     async listForSelection(selectionId: EntityId) {
       assertCan(actor, "application.read");
       return store.applications.list({ selectionId });
@@ -76,6 +76,49 @@ export function createApplicationService(context: ServiceContext) {
         store.activities.list({ entity: { type: "APPLICATION", id }, limit: 100 }),
       ]);
       return { view, evaluations, feedbacks, interviews: interviews.items, timeline };
+    },
+
+    /**
+     * Toglie il candidato dalla selezione (es. aggiunto per errore). Valutazioni,
+     * feedback e colloqui della candidatura vengono eliminati a cascata: l'interfaccia
+     * li elenca nella conferma. Con documenti collegati la rimozione è bloccata,
+     * per non lasciare file orfani nello storage. Il candidato resta in archivio.
+     */
+    async remove(id: EntityId): Promise<void> {
+      assertCan(actor, "application.manage");
+      const view = await store.applications.getView(id);
+      if (!view) throw new NotFoundError("La candidatura non esiste più.");
+      if (view.related.documents > 0) {
+        throw new DomainRuleError(
+          "La candidatura ha documenti collegati: eliminali prima di rimuoverla dalla selezione.",
+          "APPLICATION_HAS_DOCUMENTS",
+        );
+      }
+      await store.transaction(async (repos) => {
+        await recordEvent(repos, actor, {
+          activity: {
+            entityType: "APPLICATION",
+            entityId: id,
+            action: "APPLICATION_REMOVED",
+            candidateId: view.candidate.id,
+            selectionId: view.selection.id,
+            companyId: view.company.id,
+            metadata: { selectionTitle: view.selection.title, stage: view.stage.code },
+          },
+          audit: {
+            entityType: "APPLICATION",
+            entityId: id,
+            action: "DELETE",
+            changes: {
+              stage: view.stage.code,
+              evaluations: view.related.evaluations,
+              feedbacks: view.related.feedbacks,
+              interviews: view.related.interviews,
+            },
+          },
+        });
+        await repos.applications.delete(id);
+      });
     },
 
     async create(input: {
@@ -121,6 +164,36 @@ export function createApplicationService(context: ServiceContext) {
         });
         return { id: application.id };
       });
+    },
+
+    /**
+     * Aggiunge più candidati alla stessa selezione (es. i compatibili scelti da HR).
+     * Ogni candidatura passa dalle stesse regole di `create`; chi è già in selezione
+     * viene saltato, non è un errore.
+     */
+    async createMany(input: {
+      selectionId: EntityId;
+      candidateIds: EntityId[];
+      source: ApplicationSource;
+    }): Promise<{ added: number; skipped: number }> {
+      assertCan(actor, "application.manage");
+      let added = 0;
+      let skipped = 0;
+      for (const candidateId of new Set(input.candidateIds)) {
+        try {
+          await service.create({
+            candidateId,
+            selectionId: input.selectionId,
+            recruiterId: null,
+            source: input.source,
+          });
+          added++;
+        } catch (error) {
+          if (!(error instanceof ConflictError)) throw error;
+          skipped++;
+        }
+      }
+      return { added, skipped };
     },
 
     /**
@@ -246,6 +319,7 @@ export function createApplicationService(context: ServiceContext) {
       return store.stages.list();
     },
   };
+  return service;
 }
 
 export type ApplicationService = ReturnType<typeof createApplicationService>;

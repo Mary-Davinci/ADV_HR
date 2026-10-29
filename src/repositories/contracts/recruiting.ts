@@ -103,7 +103,15 @@ export interface RecruitingStageRepository {
 /** Candidatura arricchita per le viste (pipeline, scheda candidato). */
 export interface ApplicationView {
   application: Application;
-  candidate: { id: EntityId; fullName: string; city: string | null };
+  candidate: {
+    id: EntityId;
+    fullName: string;
+    city: string | null;
+    /** Mansione svolta (settore di esperienza ADV CORE o ultimo ruolo). */
+    occupation: string | null;
+    /** Anni di esperienza dichiarati o calcolati dalle esperienze. */
+    experienceYears: number | null;
+  };
   selection: { id: EntityId; title: string; status: SelectionStatus };
   company: { id: EntityId; name: string };
   stage: RecruitingStage;
@@ -112,6 +120,14 @@ export interface ApplicationView {
   latestFeedback: { content: string; createdAt: Date; author: string } | null;
   nextInterviewAt: Date | null;
   lastContactAt: Date | null;
+  /** Dati che verrebbero eliminati insieme alla candidatura. */
+  related: {
+    evaluations: number;
+    feedbacks: number;
+    interviews: number;
+    scheduledInterviews: number;
+    documents: number;
+  };
 }
 
 export interface ApplicationQuery {
@@ -137,6 +153,8 @@ export interface ApplicationRepository {
   assignRecruiter(id: EntityId, recruiterId: EntityId | null): Promise<Application>;
   /** Tocca `updated_at` (es. dopo nuovo feedback o colloquio). */
   touch(id: EntityId): Promise<void>;
+  /** Elimina la candidatura; valutazioni, feedback e colloqui seguono a cascata. */
+  delete(id: EntityId): Promise<boolean>;
 
   addEvaluation(input: {
     applicationId: EntityId;

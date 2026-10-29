@@ -2,6 +2,7 @@ import { ArrowLeft, CalendarClock, CircleCheck, CircleHelp, CircleX, Users } fro
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { cache, Suspense } from "react";
 
 import { ButtonLink } from "@/components/common/button-link";
 import { EmptyState } from "@/components/common/empty-state";
@@ -9,6 +10,10 @@ import { Timeline } from "@/components/common/timeline";
 import { UrlTabs } from "@/components/common/url-tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { SelectionFormButton } from "@/features/companies/components/company-forms";
+import {
+  CompatibleCandidates,
+  CompatibleCandidatesSkeleton,
+} from "@/features/companies/components/compatible-candidates";
 import { JobDescriptionCard } from "@/features/companies/components/job-description";
 import { PipelineTable } from "@/features/companies/components/pipeline-table";
 import { DocumentsPanel } from "@/features/documents/components/documents-panel";
@@ -23,11 +28,12 @@ import { uuidSchema } from "@/lib/zod-helpers";
 
 type Params = PageProps<"/companies/[id]/selections/[selectionId]">;
 
-async function load(companyId: string, selectionId: string) {
+/** In cache per la richiesta: metadata e pagina condividono la stessa lettura. */
+const load = cache(async (companyId: string, selectionId: string) => {
   if (!uuidSchema.safeParse(selectionId).success || !uuidSchema.safeParse(companyId).success) return null;
   const detail = await (await getServices()).selections.getDetail(selectionId);
   return detail && detail.selection.companyId === companyId ? detail : null;
-}
+});
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { id, selectionId } = await params;
@@ -50,11 +56,12 @@ function Stat({ label, value, icon: Icon }: { label: string; value: number; icon
 export default async function SelectionPage({ params, searchParams }: Params) {
   const user = await requirePermission("selection.read");
   const [{ id, selectionId }, { tab }] = await Promise.all([params, searchParams]);
-  const detail = await load(id, selectionId);
+  const [detail, recruiters] = await Promise.all([
+    load(id, selectionId),
+    getServices().then((services) => services.users.listRecruiters()),
+  ]);
   if (!detail) notFound();
 
-  const services = await getServices();
-  const recruiters = await services.users.listRecruiters();
   const {
     selection,
     companyName,
@@ -115,7 +122,7 @@ export default async function SelectionPage({ params, searchParams }: Params) {
 
       <UrlTabs
         label="Sezioni della selezione"
-        defaultValue={typeof tab === "string" ? tab : undefined}
+        defaultValue={typeof tab === "string" ? tab : applications.length === 0 ? "compatible" : undefined}
         tabs={[
           {
             value: "pipeline",
@@ -126,7 +133,7 @@ export default async function SelectionPage({ params, searchParams }: Params) {
                 <EmptyState
                   icon={Users}
                   title="Nessun candidato in selezione"
-                  description="Aggiungi candidati dalla ricerca o da “Aggiungi candidato”."
+                  description="Aggiungi i candidati dalla scheda “Candidati compatibili” o da “Aggiungi candidato”."
                 />
               ) : (
                 <PipelineTable
@@ -137,6 +144,15 @@ export default async function SelectionPage({ params, searchParams }: Params) {
                   permissions={permissions}
                 />
               ),
+          },
+          {
+            value: "compatible",
+            label: "Candidati compatibili",
+            content: (
+              <Suspense fallback={<CompatibleCandidatesSkeleton />}>
+                <CompatibleCandidates selectionId={selection.id} canAdd={permissions.manage && !selectionClosed} />
+              </Suspense>
+            ),
           },
           {
             value: "job",

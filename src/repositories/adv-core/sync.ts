@@ -12,6 +12,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { and, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 
 import {
+  activePolicyParticipations,
   activities,
   advCoreRecords,
   advCoreSyncRuns,
@@ -37,7 +38,16 @@ import { validateUpload } from "@/services/document-service";
 import type { DocumentStorage } from "@/services/storage/document-storage";
 
 import type { AdvCoreCandidate, AdvCoreClient, AdvCoreCompany } from "./client";
-import { mapCandidate, mapCompany, MAPPING_VERSION, mergeFields, type Conflicts, type FieldMap } from "./mapping";
+import {
+  ADV_CORE_POLICY_NOTE_PREFIX,
+  mapCandidate,
+  mapCompany,
+  MAPPING_VERSION,
+  mergeFields,
+  type Conflicts,
+  type FieldMap,
+  type MappedCandidate,
+} from "./mapping";
 
 export const SYNC_TAGS = {
   imported: { slug: "adv-core", name: "ADV Core" },
@@ -357,6 +367,25 @@ export async function runAdvCoreSync(options: SyncOptions): Promise<SyncSummary>
     }
   }
 
+  /**
+   * La politica attiva di ADV CORE è una riga riconoscibile dal prefisso nelle note:
+   * si sostituisce a ogni rielaborazione, le partecipazioni inserite in ADV_HR restano.
+   */
+  async function syncActivePolicy(tx: Database, candidateId: string, policy: MappedCandidate["activePolicy"]) {
+    await tx
+      .delete(activePolicyParticipations)
+      .where(
+        and(
+          eq(activePolicyParticipations.candidateId, candidateId),
+          sql`${activePolicyParticipations.notes} LIKE ${`${ADV_CORE_POLICY_NOTE_PREFIX}%`}`,
+        ),
+      );
+    if (policy) {
+      await tx.insert(activePolicyParticipations).values({ candidateId, ...policy });
+      bump("activePolicies");
+    }
+  }
+
   async function processCandidate(row: AdvCoreCandidate, record: RecordRow | undefined) {
     const legacyId = String(row.id);
     const removed = Boolean(row.data_cancellazione);
@@ -445,6 +474,8 @@ export async function runAdvCoreSync(options: SyncOptions): Promise<SyncSummary>
           );
         }
       }
+
+      await syncActivePolicy(tx, candidateId, mapped.activePolicy);
 
       const allFlags = { ...((record?.flags as Record<string, unknown>) ?? {}), ...flags };
       const hasConflicts = Object.keys(conflicts).length > 0;
