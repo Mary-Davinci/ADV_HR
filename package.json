@@ -22,6 +22,7 @@
     "sync:adv-core": "tsx --env-file-if-exists=.env.local src/repositories/adv-core/run-sync.ts",
     "cv:index": "tsx --env-file-if-exists=.env.local src/services/cv-text/run-index.ts",
     "storage:to-s3": "tsx --env-file-if-exists=.env.local src/services/storage/run-migrate-to-s3.ts",
+    "storage:backup": "tsx src/services/storage/run-backup.ts",
     "user": "tsx --env-file-if-exists=.env.local src/db/users.ts"
   },
   "dependencies": {
@@ -34,23 +35,22 @@
     "date-fns": "^4.4.0",
     "drizzle-orm": "^0.45.3",
     "lucide-react": "^1.49.0",
-    "next": "16.3.7",
+    "next": "16.4.3",
     "next-auth": "^5.0.0-beta.32",
     "next-themes": "^0.4.6",
-    "nodemailer": "^7.0.13",
+    "nodemailer": "^10.3.1",
     "pdf-lib": "^1.17.1",
-    "pdfjs-dist": "^5.7.284",
+    "pdfjs-dist": "^6.4.299",
     "pg": "^8.23.0",
     "react": "19.2.8",
     "react-day-picker": "^10.0.1",
     "react-dom": "19.2.8",
     "react-hook-form": "^7.89.0",
     "server-only": "^0.0.1",
-    "shadcn": "^4.21.0",
     "sonner": "^2.0.8",
     "tsx": "^4.23.15",
     "tw-animate-css": "^1.4.0",
-    "zod": "^4.6.5"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",
@@ -69,13 +69,19 @@
     "dotenv": "^18.0.4",
     "drizzle-kit": "^0.31.11",
     "eslint": "^9",
-    "eslint-config-next": "16.3.7",
+    "eslint-config-next": "16.4.3",
     "jsdom": "^30.1.1",
     "prettier": "^3.9.9",
     "prettier-plugin-tailwindcss": "^0.8.1",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "vitest": "^5.0.2"
+    "vitest": "^5.0.5"
+  },
+  "overrides": {
+    "nodemailer": "$nodemailer",
+    "@esbuild-kit/core-utils": {
+      "esbuild": "^0.25.12"
+    }
   },
   "engines": {
     "node": "24.x"

@@ -40,7 +40,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
             Problemi di accesso? Contatta l&apos;amministratore.
           </p>
 
-          {serverEnv.AUTH_SHOW_DEV_HINT && (
+          {serverEnv.NODE_ENV !== "production" && serverEnv.AUTH_SHOW_DEV_HINT && (
             <p className="rounded-lg border border-dashed bg-muted/50 px-3 py-2.5 text-xs text-muted-foreground">
               <span className="font-medium text-foreground">Ambiente di sviluppo.</span> Utenti di prova (es.{" "}
               <code className="font-mono text-foreground">admin@adv-hr.local</code>) e password nel README.

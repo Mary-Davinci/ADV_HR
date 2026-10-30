@@ -52,9 +52,13 @@ export class SmtpMailer implements Mailer {
       host: options.host,
       port: options.port,
       secure: options.secure,
+      requireTLS: !options.secure,
+      disableFileAccess: true,
+      disableUrlAccess: true,
       auth: options.user ? { user: options.user, pass: options.password ?? "" } : undefined,
       connectionTimeout: 20_000,
       greetingTimeout: 20_000,
+      socketTimeout: 60_000,
     });
   }
 

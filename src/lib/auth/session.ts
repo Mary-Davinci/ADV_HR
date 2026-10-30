@@ -8,6 +8,7 @@ import type { SessionUser } from "@/domain";
 import { getDataStore } from "@/repositories";
 
 import { can, type Permission } from "./permissions";
+import { isDevelopmentAccount } from "./account-policy";
 
 /**
  * Data Access Layer per la sessione. Il proxy fa solo un controllo
@@ -21,6 +22,7 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
 
   const user = await getDataStore().users.getById(userId);
   if (!user || !user.active || user.roles.length === 0) return null;
+  if (process.env.NODE_ENV === "production" && isDevelopmentAccount(user.email)) return null;
 
   return { id: user.id, email: user.email, name: user.displayName, roles: user.roles };
 });

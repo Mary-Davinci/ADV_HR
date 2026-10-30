@@ -54,6 +54,10 @@ describe("services", () => {
   });
 
   describe("authentication", () => {
+    it("rejects development accounts in production even with a correct password", async () => {
+      const auth = createAuthService(testDb.store.users, createLoginRateLimiter(testDb.db, "test-secret"), false);
+      expect(await auth.verifyCredentials("admin@adv-hr.local", PASSWORD)).toBeNull();
+    });
     it("authenticates DB users with hashed passwords only", async () => {
       const auth = createAuthService(testDb.store.users, createLoginRateLimiter(testDb.db, "test-secret"));
       const user = await auth.verifyCredentials("Chiara.Moretti@adv-hr.local", PASSWORD);

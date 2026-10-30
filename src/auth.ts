@@ -4,6 +4,7 @@ import Credentials from "next-auth/providers/credentials";
 import { getDatabase } from "@/db/client";
 import { isRoleCode } from "@/domain";
 import { loginSchema } from "@/features/auth/schemas/login-schema";
+import { isDevelopmentAccount } from "@/lib/auth/account-policy";
 import { createLoginRateLimiter, loginClientAddress } from "@/lib/auth/login-rate-limit";
 import { serverEnv } from "@/lib/env";
 import { getDataStore } from "@/repositories";
@@ -49,6 +50,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   callbacks: {
     jwt({ token, user }) {
+      if (serverEnv.NODE_ENV === "production" && isDevelopmentAccount(user?.email ?? token.email)) return null;
       if (user) {
         token.id = user.id;
         token.roles = user.roles;

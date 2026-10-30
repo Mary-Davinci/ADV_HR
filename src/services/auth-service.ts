@@ -1,4 +1,5 @@
 import type { SessionUser } from "@/domain";
+import { isDevelopmentAccount } from "@/lib/auth/account-policy";
 import { verifyPassword } from "@/lib/auth/password";
 import type { LoginRateLimiter } from "@/lib/auth/login-rate-limit";
 import type { UserRepository } from "@/repositories/types";
@@ -17,11 +18,16 @@ const TIMING_SAFE_DUMMY_HASH = [
   Buffer.alloc(64).toString("base64"),
 ].join("$");
 
-export function createAuthService(users: UserRepository, limiter: LoginRateLimiter) {
+export function createAuthService(
+  users: UserRepository,
+  limiter: LoginRateLimiter,
+  allowDevelopmentUsers = process.env.NODE_ENV !== "production",
+) {
   return {
     async verifyCredentials(email: string, password: string, clientAddress = "unknown"): Promise<SessionUser | null> {
       if (!(await limiter.consume(email, clientAddress))) return null;
-      const user = await users.findByEmailWithCredentials(email);
+      const developmentAccount = isDevelopmentAccount(email);
+      const user = !allowDevelopmentUsers && developmentAccount ? null : await users.findByEmailWithCredentials(email);
       const isValid = await verifyPassword(password, user?.passwordHash ?? TIMING_SAFE_DUMMY_HASH);
 
       if (!user || !user.passwordHash || !isValid || !user.active || user.roles.length === 0) return null;

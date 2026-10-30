@@ -99,6 +99,14 @@ Il servizio web deve usare Postgres sulla rete privata Railway. Il collegamento 
 Il proxy TCP pubblico del database deve restare disattivato. Gli strumenti sul PC non possono più
 usare il precedente endpoint pubblico; per manutenzione usare un accesso autenticato Railway.
 
+Backup: sul volume Postgres sono attivi DAILY e WEEKLY. Il servizio separato `document-backup`
+usa il comando `npm run storage:backup` con cron `0 2 * * *`, restart NEVER, regione Amsterdam
+e nessun dominio pubblico. Le variabili `S3_*` referenziano `indexed-vault`; le variabili
+`BACKUP_S3_BUCKET`, `BACKUP_S3_ENDPOINT`, `BACKUP_S3_REGION`, `BACKUP_S3_ACCESS_KEY_ID` e
+`BACKUP_S3_SECRET_ACCESS_KEY` referenziano rispettivamente BUCKET, ENDPOINT, REGION,
+ACCESS_KEY_ID e SECRET_ACCESS_KEY di `hr-document-backups`. Il build command del job è
+`node --version` (non deve costruire Next.js né applicare migration). Dettagli in `SECURITY.md`.
+
 Il provider Credentials limita **tutti i tentativi**, anche quelli riusciti: 5 per email e 30 per IP
 ogni 15 minuti. Il limite è condiviso in PostgreSQL, persiste dopo riavvii e deploy e copre sia
 la server action sia `/api/auth/callback/credentials`. I tentativi respinti non prolungano il blocco.
