@@ -39,6 +39,11 @@ function docx(xml: string, options: { declaredSize?: number; stored?: boolean; e
 }
 
 describe("CV extraction security", () => {
+  it("handles malformed markup and long Unicode whitespace without quadratic backtracking", async () => {
+    expect((await extractCvText(docx("<".repeat(200_000)), DOCX)).status).toBe("EMPTY");
+    expect((await extractCvText(docx(`<w:p>${"\u00a0".repeat(200_000)}</w:p>`), DOCX)).status).toBe("EMPTY");
+  }, 2_000);
+
   it.each([false, true])("extracts ordinary DOCX (stored=%s)", async (stored) => {
     const result = await extractCvText(docx(`<w:p>${WORDS}</w:p>`, { stored }), DOCX);
     expect(result.status).toBe("OK");

@@ -28,8 +28,9 @@ const MIN_WORDS = 20;
 function normalize(text: string): string {
   return text
     .replace(/\u0000/g, "")
-    .replace(/[ \t\f\v]+/g, " ")
-    .replace(/\s*\n\s*/g, "\n")
+    .replace(/\r\n?/g, "\n")
+    .replace(/[^\S\n]+/gu, " ")
+    .replace(/ *\n */g, "\n")
     .trim()
     .slice(0, MAX_TEXT_LENGTH);
 }
@@ -143,7 +144,7 @@ function docxText(bytes: Uint8Array): string {
     .toString("utf8")
     .replace(/<w:tab\/>/g, " ")
     .replace(/<\/w:p>/g, "\n")
-    .replace(/<[^>]+>/g, "")
+    .replace(/<[^<>]*>/g, "")
     .replace(
       /&(amp|lt|gt|quot|apos);/g,
       (_, entity: string) => ({ amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" })[entity]!,

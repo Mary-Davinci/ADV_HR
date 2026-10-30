@@ -21,6 +21,7 @@ Un audit senza segnalazioni riguarda gli avvisi noti del registro, non certifica
 L'estrazione CV rifiuta input oltre 10 MB. I DOCX sono limitati a 2048 voci ZIP e
 4 MB di XML decompresso, verificati sia dai metadati sia dal limite effettivo del
 decompressore. Archivi cifrati, directory troncate e riferimenti fuori limite sono rifiutati.
+I filtri del testo evitano backtracking quadratico su tag malformati e spazi Unicode ripetuti.
 Per i PDF si estrae solo il testo, con limite di pagine e caratteri, senza rendering immagini;
 le risorse del parser vengono rilasciate anche in caso di errore.
 
@@ -60,3 +61,7 @@ Per ripristinare un documento, scegliere uno snapshot completo, verificare lo SH
 rispetto al manifest e ricopiare l'oggetto sulla chiave originale. Per un ripristino
 totale servono sia lo snapshot Postgres sia quello documenti dello stesso periodo;
 le due copie non costituiscono una transazione unica.
+
+Prima copia documenti completata: 2173 oggetti, 967086178 byte. Tre documenti sono stati
+riletti dal backup e confrontati con dimensione e SHA-256 del manifest, con esito positivo.
+Il ripristino completo del database non è stato simulato.
