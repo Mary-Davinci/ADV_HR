@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+﻿import { randomUUID } from "node:crypto";
 
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -27,6 +27,7 @@ describe("public careers", () => {
       mailer,
       secret: "test-careers-secret",
       publicUrl: "https://hr.example.test",
+      publicEnabled: true,
       now: () => clock,
     });
   const pdf = {
@@ -90,6 +91,30 @@ describe("public careers", () => {
     expect(JSON.stringify(publicPosting)).not.toContain(selection.title);
     expect((await service().list("aziende")).map((item) => item.id)).toContain(posting.id);
     expect((await service().list("Careers")).map((item) => item.id)).not.toContain(posting.id);
+  });
+  it("disables all public reads and submissions while retaining internal publication records", async () => {
+    const { input } = await newPosting();
+    const posting = await service().publish(admin, input);
+    const { token, email } = await link(posting.id);
+    const offline = createCareersService({
+      db: test.db,
+      storage,
+      mailer,
+      secret: "test",
+      publicUrl: "https://hr.example.test",
+      publicEnabled: false,
+    });
+    const sent = mailer.sent.length;
+    await expect(offline.list("aziende")).rejects.toThrow("non è attualmente disponibile");
+    await expect(offline.get(posting.slug)).rejects.toThrow();
+    await expect(
+      offline.requestLink({ email, postingId: posting.id, board: "aziende" }, randomUUID()),
+    ).rejects.toThrow();
+    await expect(offline.challenge(token)).rejects.toThrow();
+    await expect(offline.submit(application(token), pdf, randomUUID())).rejects.toThrow();
+    expect(mailer.sent).toHaveLength(sent);
+    expect(await test.db.select().from(candidates).where(eq(candidates.email, email))).toHaveLength(0);
+    expect(await offline.publication(admin, input.selectionId)).toMatchObject({ id: posting.id });
   });
   it("denies publication to readers", async () => {
     const { input } = await newPosting();
@@ -179,6 +204,7 @@ describe("public careers", () => {
       mailer,
       secret: "test",
       publicUrl: "https://hr.example.test",
+      publicEnabled: true,
       now: () => clock,
     });
     await Promise.all([
@@ -207,6 +233,7 @@ describe("public careers", () => {
       mailer,
       secret: "test",
       publicUrl: "https://hr.example.test",
+      publicEnabled: true,
       now: () => clock,
     });
     await expect(interrupted.submit(application(token), pdf, randomUUID())).rejects.toThrow();
@@ -255,6 +282,7 @@ describe("public careers", () => {
       storage,
       secret: "test",
       publicUrl: "https://hr.example.test",
+      publicEnabled: true,
       mailer: {
         mode: "memory",
         async send() {

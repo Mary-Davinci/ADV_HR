@@ -1,6 +1,8 @@
 # Portale candidature
 
-Il portale è integrato in ADV_HR e usa PostgreSQL e lo storage privato esistenti. Durante il collaudo pubblico è disponibile su `https://hr.davinciformazione.com/jobs/aziende`; Zoho resta attivo fino al cambio del DNS.
+Il portale è integrato in ADV_HR e usa PostgreSQL e lo storage privato esistenti. È attualmente **offline su richiesta del titolare**, con `CAREERS_ENABLED=false`: pagine, richieste email e invii sono disabilitati, mentre i dati e la gestione interna restano disponibili. Zoho resta attivo fino al cambio del DNS.
+
+Per riattivare l’anteprima su `https://hr.davinciformazione.com/jobs/aziende`, impostare `CAREERS_ENABLED=true` e distribuire la configurazione. L’assenza della variabile mantiene il portale disattivato.
 
 ## Uso
 

@@ -23,6 +23,7 @@ interface CareersDependencies {
   mailer: Mailer;
   secret: string;
   publicUrl: string;
+  publicEnabled: boolean;
   now?: () => Date;
 }
 const tokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
@@ -33,6 +34,9 @@ export function createCareersService(deps: CareersDependencies) {
   const { db, storage, mailer } = deps;
   const now = () => deps.now?.() ?? new Date();
   if (!deps.secret) throw new Error("Careers signing secret missing");
+  function requirePublicPortal() {
+    if (!deps.publicEnabled) throw new NotFoundError("Il portale candidature non è attualmente disponibile.");
+  }
   const visible = () =>
     and(
       isNotNull(careerPostings.publishedAt),
@@ -64,6 +68,7 @@ export function createCareersService(deps: CareersDependencies) {
 
   return {
     async list(board: CareerBoard) {
+      requirePublicPortal();
       return db
         .select({
           id: careerPostings.id,
@@ -80,6 +85,7 @@ export function createCareersService(deps: CareersDependencies) {
         .limit(200);
     },
     async get(slug: string) {
+      requirePublicPortal();
       const rows = await db
         .select({
           id: careerPostings.id,
@@ -181,6 +187,7 @@ export function createCareersService(deps: CareersDependencies) {
       });
     },
     async requestLink(raw: z.input<typeof requestCareerLinkSchema>, clientAddress: string) {
+      requirePublicPortal();
       const input = requestCareerLinkSchema.parse(raw);
       if (input.website) return;
       await take("link-ip", clientAddress, 10, 60 * 60_000);
@@ -220,6 +227,7 @@ export function createCareersService(deps: CareersDependencies) {
       }
     },
     async challenge(token: string) {
+      requirePublicPortal();
       if (!/^[A-Za-z0-9_-]{43}$/.test(token)) throw invalidLink();
       const [challenge] = await db
         .select()
@@ -236,6 +244,7 @@ export function createCareersService(deps: CareersDependencies) {
       };
     },
     async submit(raw: z.input<typeof careerApplicationSchema>, file: UploadedFile, clientAddress: string) {
+      requirePublicPortal();
       const input = careerApplicationSchema.parse(raw);
       if (input.website) throw new DomainRuleError("Invio non riuscito.", "INVALID_FORM");
       const current = await this.challenge(input.token);
@@ -296,20 +305,18 @@ export function createCareersService(deps: CareersDependencies) {
               sizeBytes: file.bytes.byteLength,
               uploadedBy: null,
             });
-            await tx
-              .insert(careerSubmissions)
-              .values({
-                challengeId: proof.id,
-                postingId: posting?.id ?? null,
-                candidateId: candidate.id,
-                applicationId: application?.id ?? null,
-                documentId: document.id,
-                possibleDuplicateId: duplicate?.id ?? null,
-                message: input.message || null,
-                privacyUrl: CAREERS_PRIVACY_URL,
-                privacyVersion: CAREERS_PRIVACY_VERSION,
-                consentedAt: now(),
-              });
+            await tx.insert(careerSubmissions).values({
+              challengeId: proof.id,
+              postingId: posting?.id ?? null,
+              candidateId: candidate.id,
+              applicationId: application?.id ?? null,
+              documentId: document.id,
+              possibleDuplicateId: duplicate?.id ?? null,
+              message: input.message || null,
+              privacyUrl: CAREERS_PRIVACY_URL,
+              privacyVersion: CAREERS_PRIVACY_VERSION,
+              consentedAt: now(),
+            });
             await repos.activities.record({
               actorId: null,
               entityType: "CANDIDATE",

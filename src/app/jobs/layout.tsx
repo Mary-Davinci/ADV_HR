@@ -2,6 +2,7 @@ import { ArrowUpRight } from "lucide-react";
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 
 import { CAREERS_PRIVACY_URL } from "@/domain/careers";
 
@@ -14,6 +15,7 @@ export const metadata: Metadata = {
 };
 
 export default function CareersLayout({ children }: { children: React.ReactNode }) {
+  if (process.env.CAREERS_ENABLED !== "true") notFound();
   return (
     <div className="flex min-h-svh flex-col bg-[#f7f5ef] text-[#25271f]">
       <header className="border-b border-stone-200 bg-white">

@@ -9,6 +9,12 @@ import { DEFAULT_AUTHENTICATED_PATH } from "@/lib/auth/callback-url";
  */
 export default auth((request) => {
   const { pathname, search } = request.nextUrl;
+  if ((pathname === "/jobs" || pathname.startsWith("/jobs/")) && process.env.CAREERS_ENABLED !== "true") {
+    return new NextResponse("Portale candidature non disponibile", {
+      status: 404,
+      headers: { "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow" },
+    });
+  }
   const isLoggedIn = Boolean(request.auth?.user);
   const isLoginPage = pathname === "/login";
   const hostname = request.headers.get("host")?.split(":")[0]?.toLowerCase();

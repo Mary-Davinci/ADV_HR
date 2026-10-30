@@ -13,5 +13,6 @@ export function getCareers() {
     mailer: getMailer(),
     secret: process.env.AUTH_SECRET ?? "",
     publicUrl: process.env.CAREERS_PUBLIC_URL ?? serverEnv.APP_PUBLIC_URL,
+    publicEnabled: process.env.CAREERS_ENABLED === "true",
   });
 }
