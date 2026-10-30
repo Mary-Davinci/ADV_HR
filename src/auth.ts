@@ -1,10 +1,15 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 
+import { getDatabase } from "@/db/client";
 import { isRoleCode } from "@/domain";
 import { loginSchema } from "@/features/auth/schemas/login-schema";
+import { createLoginRateLimiter, loginClientAddress } from "@/lib/auth/login-rate-limit";
+import { serverEnv } from "@/lib/env";
 import { getDataStore } from "@/repositories";
 import { createAuthService } from "@/services/auth-service";
+
+let loginLimiter: ReturnType<typeof createLoginRateLimiter> | undefined;
 
 /**
  * Configurazione Auth.js.
@@ -28,13 +33,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(rawCredentials) {
+      async authorize(rawCredentials, request) {
         const parsed = loginSchema.safeParse(rawCredentials);
         if (!parsed.success) return null;
 
-        const user = await createAuthService(getDataStore().users).verifyCredentials(
+        loginLimiter ??= createLoginRateLimiter(getDatabase(serverEnv.DATABASE_URL), process.env.AUTH_SECRET ?? "");
+        const user = await createAuthService(getDataStore().users, loginLimiter).verifyCredentials(
           parsed.data.email,
           parsed.data.password,
+          loginClientAddress(request.headers, Boolean(process.env.RAILWAY_PROJECT_ID)),
         );
         return user ? { id: user.id, email: user.email, name: user.name, roles: user.roles } : null;
       },

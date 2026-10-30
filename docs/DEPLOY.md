@@ -27,6 +27,7 @@ Variabili (`${{...}}` = riferimenti Railway; i nomi tra parentesi sono quelli de
 DATABASE_URL=${{Postgres.DATABASE_URL}}
 AUTH_SECRET=<nuovo, openssl rand -base64 32: mai quello di sviluppo>
 AUTH_SHOW_DEV_HINT=false
+AUTH_URL=https://hr.davinciformazione.com
 APP_PUBLIC_URL=https://hr.davinciformazione.com
 
 DOCUMENT_STORAGE_PROVIDER=s3
@@ -90,3 +91,21 @@ Dettagli su orari, IP e chiave: [ADV_CORE_BRIDGE.md](ADV_CORE_BRIDGE.md#produzio
 6. Rimuovere il proxy TCP pubblico del database.
 7. ADV CORE: autorizzare i 3 IP statici del servizio `sync`, poi attivarne il cron e togliere la
    pianificazione dal PC ufficio (`registra-sync-adv-core.ps1 -Rimuovi`).
+
+## Protezione del login e rete database
+
+Il servizio web deve usare Postgres sulla rete privata Railway. Il collegamento esplicito è:
+`postgresql://${{Postgres.PGUSER}}:${{Postgres.PGPASSWORD}}@${{Postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/${{Postgres.PGDATABASE}}`.
+Il proxy TCP pubblico del database deve restare disattivato. Gli strumenti sul PC non possono più
+usare il precedente endpoint pubblico; per manutenzione usare un accesso autenticato Railway.
+
+Il provider Credentials limita **tutti i tentativi**, anche quelli riusciti: 5 per email e 30 per IP
+ogni 15 minuti. Il limite è condiviso in PostgreSQL, persiste dopo riavvii e deploy e copre sia
+la server action sia `/api/auth/callback/credentials`. I tentativi respinti non prolungano il blocco.
+Per evitare tentativi automatici su utenti diversi, il contatore IP viene prenotato per primo.
+Railway fornisce l'IP in `X-Real-IP`; fuori da Railway si usa un unico contatore IP di fallback.
+Nel database si salvano solo digest HMAC di email e IP, senza password o indirizzi in chiaro.
+I contatori scaduti vengono eliminati in piccoli lotti durante gli accessi successivi.
+
+La migration `0010_login_rate_limits` viene applicata dal pre-deploy prima di avviare il web.
+Se il database o il limitatore non sono disponibili, il login viene rifiutato.

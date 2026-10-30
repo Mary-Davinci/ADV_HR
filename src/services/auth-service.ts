@@ -1,5 +1,6 @@
 import type { SessionUser } from "@/domain";
 import { verifyPassword } from "@/lib/auth/password";
+import type { LoginRateLimiter } from "@/lib/auth/login-rate-limit";
 import type { UserRepository } from "@/repositories/types";
 
 /**
@@ -16,9 +17,10 @@ const TIMING_SAFE_DUMMY_HASH = [
   Buffer.alloc(64).toString("base64"),
 ].join("$");
 
-export function createAuthService(users: UserRepository) {
+export function createAuthService(users: UserRepository, limiter: LoginRateLimiter) {
   return {
-    async verifyCredentials(email: string, password: string): Promise<SessionUser | null> {
+    async verifyCredentials(email: string, password: string, clientAddress = "unknown"): Promise<SessionUser | null> {
+      if (!(await limiter.consume(email, clientAddress))) return null;
       const user = await users.findByEmailWithCredentials(email);
       const isValid = await verifyPassword(password, user?.passwordHash ?? TIMING_SAFE_DUMMY_HASH);
 

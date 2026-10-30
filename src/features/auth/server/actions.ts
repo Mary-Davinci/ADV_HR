@@ -23,7 +23,7 @@ export async function loginAction(input: unknown, callbackUrl?: string): Promise
     if (error instanceof AuthError) {
       return actionError(
         error.type === "CredentialsSignin"
-          ? "Email o password non corrette."
+          ? "Accesso non riuscito. Controlla email e password; dopo troppi tentativi attendi 15 minuti."
           : "Accesso non riuscito. Riprova tra qualche istante.",
       );
     }

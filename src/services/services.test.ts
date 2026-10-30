@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { seedDatabase } from "@/db/seed/seed";
 import { DomainRuleError, type RoleCode, type SessionUser } from "@/domain";
 import { ForbiddenError } from "@/lib/auth/permissions";
+import { createLoginRateLimiter } from "@/lib/auth/login-rate-limit";
 import { createTestDatabase, type TestDatabase } from "@/test/test-database";
 
 import { createApplicationService } from "./application-service";
@@ -54,7 +55,7 @@ describe("services", () => {
 
   describe("authentication", () => {
     it("authenticates DB users with hashed passwords only", async () => {
-      const auth = createAuthService(testDb.store.users);
+      const auth = createAuthService(testDb.store.users, createLoginRateLimiter(testDb.db, "test-secret"));
       const user = await auth.verifyCredentials("Chiara.Moretti@adv-hr.local", PASSWORD);
       expect(user).toMatchObject({ email: "chiara.moretti@adv-hr.local", roles: ["RECRUITER"] });
       expect(await auth.verifyCredentials("chiara.moretti@adv-hr.local", "wrong")).toBeNull();

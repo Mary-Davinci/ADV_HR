@@ -71,6 +71,13 @@
       "when": 1793270861567,
       "tag": "0009_candidate_origin_orientation",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793349665734,
+      "tag": "0010_login_rate_limits",
+      "breakpoints": true
     }
   ]
 }
