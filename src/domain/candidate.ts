@@ -86,7 +86,7 @@ export const ACTIVE_POLICY_STATUSES = ["ACTIVE", "COMPLETED", "INTERRUPTED"] as 
 export type ActivePolicyStatus = (typeof ACTIVE_POLICY_STATUSES)[number];
 
 /** Da dove arriva il candidato: importato da ADV CORE, dalle piattaforme di annunci o inserito a mano. */
-export const CANDIDATE_ORIGINS = ["ADV_CORE", "INDEED", "LINKEDIN", "MANUAL"] as const;
+export const CANDIDATE_ORIGINS = ["ADV_CORE", "INDEED", "LINKEDIN", "MANUAL", "WEBSITE"] as const;
 export type CandidateOrigin = (typeof CANDIDATE_ORIGINS)[number];
 
 /* ------------------------------------------------------------------ */

@@ -1,4 +1,4 @@
-import { UserRound } from "lucide-react";
+import { Globe, UserRound } from "lucide-react";
 import Image from "next/image";
 
 import { CANDIDATE_ORIGIN_LABELS } from "@/config/labels";
@@ -39,6 +39,7 @@ export function OriginBadge({ origin, className }: { origin: CandidateOrigin; cl
         </span>
       )}
       {origin === "MANUAL" && <UserRound aria-hidden="true" className="size-3.5" />}
+      {origin === "WEBSITE" && <Globe aria-hidden="true" className="size-3.5" />}
     </span>
   );
 }

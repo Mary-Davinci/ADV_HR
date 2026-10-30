@@ -25,6 +25,8 @@ import { requirePermission } from "@/lib/auth/session";
 import { EMPTY_VALUE, formatDate } from "@/lib/format";
 import { getServices } from "@/lib/server/services";
 import { uuidSchema } from "@/lib/zod-helpers";
+import { getCareers } from "@/lib/server/careers";
+import { PublicationForm } from "@/features/careers/components/publication-form";
 
 type Params = PageProps<"/companies/[id]/selections/[selectionId]">;
 
@@ -61,6 +63,7 @@ export default async function SelectionPage({ params, searchParams }: Params) {
     getServices().then((services) => services.users.listRecruiters()),
   ]);
   if (!detail) notFound();
+  const publication = await getCareers().publication(user, selectionId);
 
   const {
     selection,
@@ -163,6 +166,19 @@ export default async function SelectionPage({ params, searchParams }: Params) {
                 selectionTitle={selection.title}
                 jobDescription={jobDescription}
                 canEdit={can(user, "selection.manage")}
+              />
+            ),
+          },
+          {
+            value: "publication",
+            label: "Sito pubblico",
+            content: (
+              <PublicationForm
+                selectionId={selection.id}
+                title={selection.title}
+                publication={publication}
+                canManage={can(user, "selection.manage")}
+                open={selection.status === "OPEN"}
               />
             ),
           },

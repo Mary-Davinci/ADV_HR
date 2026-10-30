@@ -24,6 +24,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { formatDateTime, formatTimeAgo, getInitials } from "@/lib/format";
 import { getServices } from "@/lib/server/services";
 import { uuidSchema } from "@/lib/zod-helpers";
+import { getCareers } from "@/lib/server/careers";
 
 async function loadProfile(id: string) {
   if (!uuidSchema.safeParse(id).success) return null;
@@ -41,6 +42,7 @@ export default async function CandidatePage({ params, searchParams }: PageProps<
   const [{ id }, { tab }] = await Promise.all([params, searchParams]);
   const profile = await loadProfile(id);
   if (!profile) notFound();
+  const webSubmissions = await getCareers().submissions(user, id);
 
   const services = await getServices();
   const canEdit = can(user, "candidate.edit");
@@ -59,6 +61,37 @@ export default async function CandidatePage({ params, searchParams }: PageProps<
   const latest = profile.applications[0];
 
   const tabs = [
+    ...(webSubmissions.length
+      ? [
+          {
+            value: "website",
+            label: "Dal sito web",
+            content: (
+              <Card>
+                <CardContent className="space-y-5">
+                  {webSubmissions.map((submission, index) => (
+                    <div key={index} className="space-y-3">
+                      <p className="text-sm text-muted-foreground">
+                        Informativa accettata il {formatDateTime(submission.consentedAt)}. Il CV si trova nella scheda
+                        Documenti.
+                      </p>
+                      {submission.possibleDuplicateId && (
+                        <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+                          Esiste già un profilo con questa email.{" "}
+                          <ButtonLink variant="link" href={`/recruiting/${submission.possibleDuplicateId}`}>
+                            Confronta il profilo esistente
+                          </ButtonLink>
+                        </p>
+                      )}
+                      {submission.message && <p className="text-sm whitespace-pre-wrap">{submission.message}</p>}
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            ),
+          },
+        ]
+      : []),
     { value: "overview", label: "Panoramica", content: <OverviewPanel profile={profile} canEdit={canEdit} /> },
     { value: "profile", label: "Profilo", content: <ProfilePanel profile={profile} canEdit={canEdit} /> },
     {

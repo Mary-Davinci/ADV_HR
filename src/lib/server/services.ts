@@ -40,13 +40,13 @@ function jobRequestTemplate(): Promise<Uint8Array> {
   return globalForServices.__advHrJobRequestTemplate;
 }
 
-function getDocumentStorage(): DocumentStorage {
+export function getDocumentStorage(): DocumentStorage {
   globalForServices.__advHrStorage ??= createDocumentStorage(readStorageConfig(process.env));
   return globalForServices.__advHrStorage;
 }
 
 /** SMTP se configurato; altrimenti le mail finiscono come .eml nella cartella outbox. */
-function getMailer(): Mailer {
+export function getMailer(): Mailer {
   globalForServices.__advHrMailer ??= serverEnv.SMTP_HOST
     ? new SmtpMailer(
         {

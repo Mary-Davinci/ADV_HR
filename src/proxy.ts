@@ -11,10 +11,20 @@ export default auth((request) => {
   const { pathname, search } = request.nextUrl;
   const isLoggedIn = Boolean(request.auth?.user);
   const isLoginPage = pathname === "/login";
+  const hostname = request.headers.get("host")?.split(":")[0]?.toLowerCase();
+  // The public jobs hostname has its own entry point; HR access stays on hr.*.
+  if (hostname === "jobs.davinciformazione.com" && pathname !== "/jobs" && !pathname.startsWith("/jobs/")) {
+    if (pathname === "/") return NextResponse.redirect(new URL("https://jobs.davinciformazione.com/jobs/aziende"));
+    const hrUrl = new URL(process.env.APP_PUBLIC_URL ?? "https://hr.davinciformazione.com");
+    hrUrl.pathname = pathname;
+    hrUrl.search = search;
+    return NextResponse.redirect(hrUrl);
+  }
 
   // Modulo Job Description per le aziende: niente login, l'accesso è autorizzato
   // dal token del link personale (verificato nel servizio a ogni richiesta).
   if (pathname.startsWith("/modulo/")) return NextResponse.next();
+  if (pathname === "/jobs" || pathname.startsWith("/jobs/")) return NextResponse.next();
 
   if (isLoginPage && isLoggedIn) {
     return NextResponse.redirect(new URL(DEFAULT_AUTHENTICATED_PATH, request.nextUrl));
