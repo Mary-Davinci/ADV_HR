@@ -63,6 +63,48 @@ function clients(fail = false, empty = false) {
 }
 
 describe("independent document snapshots", () => {
+  it.each([1, 20 * 1024 * 1024])("bounds parallel transfers and buffered memory for %i-byte objects", async (size) => {
+    let active = 0;
+    let peak = 0;
+    const count = size === 1 ? 9 : 3;
+    const source = {
+      send: vi.fn(async (command: unknown) => {
+        if (command instanceof ListObjectsV2Command)
+          return {
+            Contents: Array.from({ length: count }, (_, i) => ({ Key: `documents/${i}`, ETag: '"etag"', Size: size })),
+          };
+        if (command instanceof GetObjectCommand) {
+          active++;
+          peak = Math.max(peak, active);
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          return {
+            ContentLength: size,
+            Body: {
+              transformToByteArray: async () => {
+                active--;
+                return new Uint8Array(size);
+              },
+            },
+          };
+        }
+        throw new Error("Unexpected command");
+      }),
+    } as unknown as S3Client;
+    const destination = {
+      send: vi.fn(async (command: unknown) => (command instanceof ListObjectsV2Command ? { Contents: [] } : {})),
+    } as unknown as S3Client;
+    const result = await backupDocuments({
+      source,
+      destination,
+      sourceBucket: "source",
+      destinationBucket: "backup",
+      sourcePrefix: "documents/",
+      now: NOW,
+    });
+    expect(result.documents).toBe(count);
+    expect(peak).toBe(size === 1 ? 4 : 1);
+  });
+
   it("copies all pages, writes a complete manifest last and expires only old backup objects", async () => {
     const state = clients();
     expect(
