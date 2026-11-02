@@ -77,6 +77,11 @@ export interface Authorizable {
   roles: readonly RoleCode[];
 }
 
+/** Ruoli che concedono un permesso (es. per scegliere i destinatari di una notifica). */
+export function rolesWith(permission: Permission): RoleCode[] {
+  return (Object.keys(ROLE_PERMISSIONS) as RoleCode[]).filter((role) => ROLE_PERMISSIONS[role].includes(permission));
+}
+
 export function can(user: Authorizable | null | undefined, permission: Permission): boolean {
   return Boolean(user?.roles.some((role) => ROLE_PERMISSIONS[role]?.includes(permission)));
 }

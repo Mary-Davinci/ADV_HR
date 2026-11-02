@@ -22,8 +22,10 @@ import type {
   CandidateSkillInput,
   FeedbackView,
   InterviewView,
+  PositionMatchSource,
 } from "@/repositories/types";
 
+import { selectionSearchProfile } from "./company-service";
 import { changedFields, ConflictError, NotFoundError, nowOf, recordEvent, type ServiceContext } from "./context";
 
 /** Tutto ciò che serve alla scheda candidato, caricato in un'unica chiamata. */
@@ -44,6 +46,35 @@ export interface CandidateProfileView extends CandidateAggregate {
   /** Prossimo colloquio; se non ce ne sono, l'ultimo ancora "programmato" ma già passato (da aggiornare). */
   nextInterview: InterviewView | null;
   nextInterviewOverdue: boolean;
+}
+
+/** Selezione aperta consigliata a un candidato, con i motivi della proposta. */
+export interface RecommendedSelection {
+  selectionId: EntityId;
+  title: string;
+  companyId: EntityId;
+  companyName: string;
+  /** Dove compare la figura cercata nei dati del candidato. */
+  roleFoundIn: PositionMatchSource[];
+  matchedRequirements: string[];
+  sameProvince: boolean;
+  sameRegion: boolean;
+}
+
+const RECOMMENDATIONS_SHOWN = 5;
+const RECOMMENDATION_CONCURRENCY = 4;
+const SOURCE_RANK: Record<PositionMatchSource, number> = { EXPERIENCE: 3, CV: 2, INTEREST: 1, DETAILS: 0 };
+
+/** Stesso ordine dei candidati compatibili: dove compare la figura, vicinanza, requisiti. */
+function compareRecommendations(a: RecommendedSelection, b: RecommendedSelection): number {
+  const source = (item: RecommendedSelection) => Math.max(-1, ...item.roleFoundIn.map((s) => SOURCE_RANK[s]));
+  const near = (item: RecommendedSelection) => Number(item.sameProvince) * 2 + Number(item.sameRegion);
+  return (
+    source(b) - source(a) ||
+    near(b) - near(a) ||
+    b.matchedRequirements.length - a.matchedRequirements.length ||
+    a.title.localeCompare(b.title)
+  );
 }
 
 const COLLECTION_LABELS: Record<CandidateCollectionKind, string> = {
@@ -90,6 +121,51 @@ export function createCandidateService(context: ServiceContext) {
     async search(query: CandidateSearchQuery): Promise<Page<CandidateListItem>> {
       assertCan(actor, "candidate.read");
       return store.candidates.search(query);
+    },
+
+    /**
+     * Posizioni consigliate: le selezioni aperte in cui il candidato compare tra i
+     * compatibili, con il motivo. Stessi criteri dei "candidati compatibili" di una
+     * selezione, applicati al contrario. Il sistema propone, decide HR.
+     */
+    async recommendedSelections(id: EntityId): Promise<RecommendedSelection[]> {
+      assertCan(actor, "candidate.read");
+      assertCan(actor, "selection.read");
+      await requireCandidate(id);
+      const open = await store.selections.options({ statuses: ["OPEN"] });
+      const results: RecommendedSelection[] = [];
+      // A gruppi: non occupa tutte le connessioni del pool con molte selezioni aperte.
+      for (let start = 0; start < open.length; start += RECOMMENDATION_CONCURRENCY) {
+        const batch = open.slice(start, start + RECOMMENDATION_CONCURRENCY);
+        const found = await Promise.all(
+          batch.map(async (option) => {
+            const profile = await selectionSearchProfile(store, option.id);
+            if (!profile || profile.keywords.role.length === 0) return null;
+            const { items } = await store.candidates.matchPosition({
+              roleKeywords: profile.keywords.role,
+              bonusKeywords: profile.keywords.bonus,
+              selectionId: option.id,
+              jobProvince: profile.jobProvince,
+              candidateIds: [id],
+              limit: 1,
+            });
+            const match = items[0];
+            if (!match || match.alreadyInSelection) return null;
+            return {
+              selectionId: option.id,
+              title: option.title,
+              companyName: option.companyName,
+              companyId: profile.selection.selection.companyId,
+              roleFoundIn: match.roleFoundIn,
+              matchedRequirements: match.matchedRequirements,
+              sameProvince: match.sameProvince,
+              sameRegion: match.sameRegion,
+            } satisfies RecommendedSelection;
+          }),
+        );
+        results.push(...found.filter((item) => item !== null));
+      }
+      return results.sort(compareRecommendations).slice(0, RECOMMENDATIONS_SHOWN);
     },
 
     async getProfile(id: EntityId): Promise<CandidateProfileView | null> {

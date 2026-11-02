@@ -27,6 +27,7 @@ describe("public careers", () => {
       mailer,
       secret: "test-careers-secret",
       publicUrl: "https://hr.example.test",
+      appUrl: "https://hr.example.test",
       publicEnabled: true,
       now: () => clock,
     });
@@ -102,6 +103,7 @@ describe("public careers", () => {
       mailer,
       secret: "test",
       publicUrl: "https://hr.example.test",
+      appUrl: "https://hr.example.test",
       publicEnabled: false,
     });
     const sent = mailer.sent.length;
@@ -204,6 +206,7 @@ describe("public careers", () => {
       mailer,
       secret: "test",
       publicUrl: "https://hr.example.test",
+      appUrl: "https://hr.example.test",
       publicEnabled: true,
       now: () => clock,
     });
@@ -233,6 +236,7 @@ describe("public careers", () => {
       mailer,
       secret: "test",
       publicUrl: "https://hr.example.test",
+      appUrl: "https://hr.example.test",
       publicEnabled: true,
       now: () => clock,
     });
@@ -282,6 +286,7 @@ describe("public careers", () => {
       storage,
       secret: "test",
       publicUrl: "https://hr.example.test",
+      appUrl: "https://hr.example.test",
       publicEnabled: true,
       mailer: {
         mode: "memory",
@@ -295,5 +300,60 @@ describe("public careers", () => {
       "offline",
     );
     expect(await test.db.select().from(careerChallenges).where(eq(careerChallenges.email, email))).toHaveLength(0);
+  });
+  it("notifies each active HR user in the app, without email unless enabled", async () => {
+    const { input } = await newPosting();
+    const posting = await service().publish(admin, input);
+    const { token, email } = await link(posting.id);
+    const viewer = (await test.store.users.findByEmailWithCredentials("consulta@adv-hr.local"))!;
+    const viewerBefore = await test.store.notifications.countUnread(viewer.id);
+    const adminBefore = await test.store.notifications.countUnread(admin.id);
+    const mailsBefore = mailer.sent.length;
+
+    await service().submit(application(token), pdf, randomUUID());
+    await service().submit(application(token), pdf, randomUUID());
+
+    const [candidate] = await test.db.select().from(candidates).where(eq(candidates.email, email));
+    const [latest] = await test.store.notifications.listForUser(admin.id, 1);
+    expect(latest).toMatchObject({
+      kind: "CAREER_APPLICATION",
+      title: "Nuova candidatura dal sito",
+      body: "Mario Candidato · Operatore amministrativo",
+      href: `/recruiting/${candidate!.id}`,
+      readAt: null,
+    });
+    expect(await test.store.notifications.countUnread(admin.id)).toBe(adminBefore + 1);
+    // VIEWER non gestisce candidature: nessuna notifica.
+    expect(await test.store.notifications.countUnread(viewer.id)).toBe(viewerBefore);
+    expect(mailer.sent).toHaveLength(mailsBefore);
+
+    // Ognuno segna come lette solo le proprie.
+    await test.store.notifications.markRead(viewer.id, [latest!.id]);
+    expect(await test.store.notifications.countUnread(admin.id)).toBe(adminBefore + 1);
+    await test.store.notifications.markRead(admin.id, [latest!.id]);
+    expect(await test.store.notifications.countUnread(admin.id)).toBe(adminBefore);
+  });
+  it("emails HR a link to the candidate, never contact details or the CV, when enabled", async () => {
+    const withEmail = createCareersService({
+      db: test.db,
+      storage,
+      mailer,
+      secret: "test-careers-secret",
+      publicUrl: "https://hr.example.test",
+      appUrl: "https://hr.example.test",
+      publicEnabled: true,
+      hrEmail: "risorseumane@example.test",
+      now: () => clock,
+    });
+    const { token } = await link(null);
+    await withEmail.submit(application(token), pdf, randomUUID());
+    const notice = mailer.sent.at(-1)!;
+    expect(notice.to).toBe("risorseumane@example.test");
+    expect(notice.subject).toBe("[ADV_HR] Nuova candidatura: Mario Candidato");
+    expect(notice.text).toMatch(/candidatura spontanea/);
+    expect(notice.text).toMatch(/https:\/\/hr\.example\.test\/recruiting\/[0-9a-f-]{36}/);
+    expect(notice.text + notice.html).not.toContain("3331234567");
+    expect(notice.text + notice.html).not.toContain("Il mio messaggio");
+    expect(notice.attachments ?? []).toHaveLength(0);
   });
 });

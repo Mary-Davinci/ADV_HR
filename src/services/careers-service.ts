@@ -8,12 +8,13 @@ import type { SessionUser } from "@/domain";
 import { DomainRuleError, INITIAL_STAGE_CODE } from "@/domain";
 import { CAREERS_PRIVACY_URL, CAREERS_PRIVACY_VERSION, type CareerBoard } from "@/domain/careers";
 import { careerApplicationSchema, publicationSchema, requestCareerLinkSchema } from "@/features/careers/schemas";
-import { assertCan } from "@/lib/auth/permissions";
+import { assertCan, rolesWith } from "@/lib/auth/permissions";
 import { createPostgresDataStore } from "@/repositories/postgres";
 import type { Database } from "@/repositories/postgres/db";
 
 import { NotFoundError } from "./context";
 import { sanitizeFilename, validateUpload, type UploadedFile } from "./document-service";
+import { careerApplicationEmail } from "./mail/job-request-emails";
 import type { Mailer } from "./mail/mailer";
 import type { DocumentStorage } from "./storage/document-storage";
 
@@ -24,6 +25,10 @@ interface CareersDependencies {
   secret: string;
   publicUrl: string;
   publicEnabled: boolean;
+  /** Indirizzo del gestionale HR, per i link nelle email interne. */
+  appUrl: string;
+  /** Destinatario dell'avviso email per ogni candidatura; assente = solo notifica in app. */
+  hrEmail?: string;
   now?: () => Date;
 }
 const tokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
@@ -256,88 +261,119 @@ export function createCareersService(deps: CareersDependencies) {
       const key = `careers/${randomUUID()}`;
       await storage.put(key, file.bytes);
       let used = false;
+      let created: { candidateId: string; candidateName: string; positionTitle: string | null } | undefined;
       try {
-        used = Boolean(
-          await db.transaction(async (tx) => {
-            const [proof] = await tx
-              .select()
-              .from(careerChallenges)
-              .where(eq(careerChallenges.tokenHash, tokenHash(input.token)))
-              .for("update");
-            if (!proof || proof.expiresAt <= now()) throw invalidLink();
-            if (proof.consumedAt) return;
-            const posting = proof.postingId ? await activePosting(proof.postingId, tx, true) : null;
-            const repos = createPostgresDataStore(tx);
-            const stage = posting ? await repos.stages.getByCode(INITIAL_STAGE_CODE) : null;
-            if (posting && (!stage || !stage.active))
-              throw new DomainRuleError("La candidatura non è momentaneamente disponibile.", "STAGE");
-            const [duplicate] = await tx
-              .select({ id: candidates.id })
-              .from(candidates)
-              .where(sql`lower(${candidates.email}) = ${proof.email}`)
-              .limit(1);
-            const candidate = await repos.candidates.create({
-              firstName: input.firstName,
-              lastName: input.lastName,
-              email: proof.email,
-              phone: input.phone,
-              fiscalCode: null,
-              birthDate: null,
-              gender: "NOT_SPECIFIED",
-            });
-            await tx.update(candidates).set({ origin: "WEBSITE" }).where(eq(candidates.id, candidate.id));
-            const application = posting
-              ? await repos.applications.create({
-                  candidateId: candidate.id,
-                  selectionId: posting.selectionId,
-                  stageId: stage!.id,
-                  recruiterId: null,
-                  source: "WEBSITE",
-                })
-              : null;
-            const document = await repos.documents.create({
-              owner: { candidateId: candidate.id },
-              type: "CV",
-              filename: sanitizeFilename(file.name),
-              storageProvider: storage.provider,
-              storageKey: key,
-              mimeType: file.mimeType,
-              sizeBytes: file.bytes.byteLength,
-              uploadedBy: null,
-            });
-            await tx.insert(careerSubmissions).values({
-              challengeId: proof.id,
-              postingId: posting?.id ?? null,
+        created = await db.transaction(async (tx) => {
+          const [proof] = await tx
+            .select()
+            .from(careerChallenges)
+            .where(eq(careerChallenges.tokenHash, tokenHash(input.token)))
+            .for("update");
+          if (!proof || proof.expiresAt <= now()) throw invalidLink();
+          if (proof.consumedAt) return;
+          const posting = proof.postingId ? await activePosting(proof.postingId, tx, true) : null;
+          const repos = createPostgresDataStore(tx);
+          const stage = posting ? await repos.stages.getByCode(INITIAL_STAGE_CODE) : null;
+          if (posting && (!stage || !stage.active))
+            throw new DomainRuleError("La candidatura non è momentaneamente disponibile.", "STAGE");
+          const [duplicate] = await tx
+            .select({ id: candidates.id })
+            .from(candidates)
+            .where(sql`lower(${candidates.email}) = ${proof.email}`)
+            .limit(1);
+          const candidate = await repos.candidates.create({
+            firstName: input.firstName,
+            lastName: input.lastName,
+            email: proof.email,
+            phone: input.phone,
+            fiscalCode: null,
+            birthDate: null,
+            gender: "NOT_SPECIFIED",
+          });
+          await tx.update(candidates).set({ origin: "WEBSITE" }).where(eq(candidates.id, candidate.id));
+          const application = posting
+            ? await repos.applications.create({
+                candidateId: candidate.id,
+                selectionId: posting.selectionId,
+                stageId: stage!.id,
+                recruiterId: null,
+                source: "WEBSITE",
+              })
+            : null;
+          const document = await repos.documents.create({
+            owner: { candidateId: candidate.id },
+            type: "CV",
+            filename: sanitizeFilename(file.name),
+            storageProvider: storage.provider,
+            storageKey: key,
+            mimeType: file.mimeType,
+            sizeBytes: file.bytes.byteLength,
+            uploadedBy: null,
+          });
+          await tx.insert(careerSubmissions).values({
+            challengeId: proof.id,
+            postingId: posting?.id ?? null,
+            candidateId: candidate.id,
+            applicationId: application?.id ?? null,
+            documentId: document.id,
+            possibleDuplicateId: duplicate?.id ?? null,
+            message: input.message || null,
+            privacyUrl: CAREERS_PRIVACY_URL,
+            privacyVersion: CAREERS_PRIVACY_VERSION,
+            consentedAt: now(),
+          });
+          await repos.activities.record({
+            actorId: null,
+            entityType: "CANDIDATE",
+            entityId: candidate.id,
+            action: "CREATED",
+            candidateId: candidate.id,
+            metadata: { source: "WEBSITE", possibleDuplicate: Boolean(duplicate), board: proof.board },
+          });
+          await repos.audit.record({
+            actorId: null,
+            entityType: "CANDIDATE",
+            entityId: candidate.id,
+            action: "CREATE",
+            changes: { source: "WEBSITE", privacyVersion: CAREERS_PRIVACY_VERSION },
+          });
+          // Notifica a chi gestisce le candidature, nella stessa transazione:
+          // nessuna candidatura senza avviso, nessun avviso senza candidatura.
+          const candidateName = `${input.firstName} ${input.lastName}`.trim();
+          const positionTitle = posting?.content.title ?? null;
+          const recipients = await repos.users.listActiveWithRoles(rolesWith("application.manage"));
+          await repos.notifications.createForUsers(
+            recipients.map((user) => user.id),
+            {
+              kind: "CAREER_APPLICATION",
+              title: positionTitle ? "Nuova candidatura dal sito" : "Nuova candidatura spontanea",
+              body: (positionTitle ? `${candidateName} · ${positionTitle}` : candidateName).slice(0, 300),
+              href: `/recruiting/${candidate.id}`,
               candidateId: candidate.id,
-              applicationId: application?.id ?? null,
-              documentId: document.id,
-              possibleDuplicateId: duplicate?.id ?? null,
-              message: input.message || null,
-              privacyUrl: CAREERS_PRIVACY_URL,
-              privacyVersion: CAREERS_PRIVACY_VERSION,
-              consentedAt: now(),
-            });
-            await repos.activities.record({
-              actorId: null,
-              entityType: "CANDIDATE",
-              entityId: candidate.id,
-              action: "CREATED",
-              candidateId: candidate.id,
-              metadata: { source: "WEBSITE", possibleDuplicate: Boolean(duplicate), board: proof.board },
-            });
-            await repos.audit.record({
-              actorId: null,
-              entityType: "CANDIDATE",
-              entityId: candidate.id,
-              action: "CREATE",
-              changes: { source: "WEBSITE", privacyVersion: CAREERS_PRIVACY_VERSION },
-            });
-            await tx.update(careerChallenges).set({ consumedAt: now() }).where(eq(careerChallenges.id, proof.id));
-            return true;
-          }),
-        );
+            },
+          );
+          await tx.update(careerChallenges).set({ consumedAt: now() }).where(eq(careerChallenges.id, proof.id));
+          return { candidateId: candidate.id, candidateName, positionTitle };
+        });
+        used = Boolean(created);
       } finally {
         if (!used) await storage.delete(key);
+      }
+      // Email a HR (facoltativa, HR_EMAIL_ON_APPLICATION): dopo il commit e "best effort",
+      // un errore di invio non annulla la candidatura già registrata.
+      if (created && deps.hrEmail) {
+        await mailer
+          .send(
+            careerApplicationEmail({
+              to: deps.hrEmail,
+              candidateName: created.candidateName,
+              positionTitle: created.positionTitle,
+              candidateUrl: `${deps.appUrl}/recruiting/${created.candidateId}`,
+            }),
+          )
+          .catch((error: unknown) =>
+            console.error("[careers] avviso HR non inviato:", error instanceof Error ? error.name : "errore"),
+          );
       }
     },
     async submissions(actor: SessionUser, candidateId: string) {

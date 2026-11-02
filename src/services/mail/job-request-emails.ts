@@ -122,6 +122,33 @@ ${button(input.link, "Carica il modulo firmato")}
 }
 
 /** Notifica interna a HR (nessun dato personale dei candidati). */
+/**
+ * Avviso a HR di una candidatura arrivata dal sito. Solo nome e posizione:
+ * CV e contatti si consultano in ADV_HR (accesso con login), mai via email.
+ */
+export function careerApplicationEmail(input: {
+  to: string;
+  candidateName: string;
+  /** Titolo dell'annuncio; null = candidatura spontanea. */
+  positionTitle: string | null;
+  candidateUrl: string;
+}): MailMessage {
+  const what = input.positionTitle ? `per "${input.positionTitle}"` : "spontanea";
+  const lines = [
+    `${input.candidateName} ha inviato una candidatura ${what} dal sito.`,
+    "Il CV e i dati sono nella scheda del candidato in ADV_HR, con le posizioni aperte più pertinenti.",
+  ];
+  return {
+    to: input.to,
+    subject: `[ADV_HR] Nuova candidatura: ${input.candidateName}`,
+    text: [...lines, "", input.candidateUrl].join("\n"),
+    html: layout(
+      "Nuova candidatura dal sito",
+      `${lines.map((line) => `<p>${escape(line)}</p>`).join("")}${button(input.candidateUrl, "Apri la candidatura in ADV_HR")}`,
+    ),
+  };
+}
+
 export function hrNotificationEmail(input: {
   to: string;
   event: "submitted" | "signed";

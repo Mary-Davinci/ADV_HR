@@ -20,6 +20,7 @@ import { createJobRequestService, type JobRequestDependencies } from "@/services
 import { renderJobRequestPdf } from "@/services/job-requests/job-request-pdf";
 import { createPublicJobRequestService } from "@/services/job-requests/public-job-request-service";
 import { OutboxMailer, SmtpMailer, type Mailer } from "@/services/mail/mailer";
+import { createNotificationService } from "@/services/notification-service";
 import type { DocumentStorage } from "@/services/storage/document-storage";
 import { createDocumentStorage, readStorageConfig } from "@/services/storage/storage-config";
 import { createTalentPoolService, createTaskService } from "@/services/task-service";
@@ -88,6 +89,7 @@ export function servicesFor(actor: SessionUser) {
     jobRequests: createJobRequestService(context, jobRequestDependencies()),
     dashboard: createDashboardService(context),
     reports: createReportService(context),
+    notifications: createNotificationService(context),
     users: getDataStore().users,
   };
 }

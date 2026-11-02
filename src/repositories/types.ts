@@ -1,4 +1,4 @@
-import type { EntityId, RoleCode, User, UserRef, UserWithCredentials } from "@/domain";
+import type { EntityId, Notification, NotificationInput, RoleCode, User, UserRef, UserWithCredentials } from "@/domain";
 
 import type { CandidateRepository, SkillRepository } from "./contracts/candidates";
 import type { JobRequestRepository } from "./contracts/job-requests";
@@ -44,7 +44,18 @@ export interface UserRepository {
   /** Utenti attivi che possono essere assegnati come recruiter. */
   listRecruiters(): Promise<UserRef[]>;
   listActive(): Promise<UserRef[]>;
+  /** Utenti attivi con almeno uno dei ruoli indicati (destinatari di notifiche). */
+  listActiveWithRoles(roles: readonly RoleCode[]): Promise<Array<UserRef & { email: string }>>;
   create(input: { email: string; displayName: string; passwordHash: string | null; roles: RoleCode[] }): Promise<User>;
+}
+
+/** Notifiche personali degli utenti. Ogni operazione di lettura è limitata al proprio utente. */
+export interface NotificationRepository {
+  createForUsers(userIds: readonly EntityId[], input: NotificationInput): Promise<void>;
+  listForUser(userId: EntityId, limit: number): Promise<Notification[]>;
+  countUnread(userId: EntityId): Promise<number>;
+  /** Senza `ids` segna come lette tutte le notifiche dell'utente. */
+  markRead(userId: EntityId, ids?: readonly EntityId[]): Promise<void>;
 }
 
 /** Statistiche aggregate per dashboard e report: solo conteggi, nessun dato personale. */
@@ -79,6 +90,7 @@ export interface Repositories {
   documents: DocumentRepository;
   talentPools: TalentPoolRepository;
   reports: ReportRepository;
+  notifications: NotificationRepository;
 }
 
 /**

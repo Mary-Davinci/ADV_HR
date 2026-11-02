@@ -769,6 +769,7 @@ export class PostgresCandidateRepository implements CandidateRepository {
           LIMIT 1
         ) adv ON true
         WHERE c.id NOT IN (SELECT candidate_id FROM removed)
+          ${query.candidateIds?.length ? sql`AND c.id IN (${sqlList(query.candidateIds)})` : sql``}
       ),
       found AS (
         SELECT prof.id, kw.word, kw.ord, kw.role,

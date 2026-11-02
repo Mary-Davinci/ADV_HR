@@ -1,6 +1,7 @@
 import { ArrowLeft, Clock, History, PhoneCall } from "lucide-react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 
 import { ButtonLink } from "@/components/common/button-link";
 import { Timeline } from "@/components/common/timeline";
@@ -12,6 +13,10 @@ import { LogContactButton } from "@/features/candidates/components/log-contact-b
 import { ApplicationsPanel } from "@/features/candidates/components/profile/applications-panel";
 import { PreferencesPanel, ProfilePanel } from "@/features/candidates/components/profile/details-panels";
 import { OverviewPanel } from "@/features/candidates/components/profile/overview-panel";
+import {
+  RecommendedSelections,
+  RecommendedSelectionsSkeleton,
+} from "@/features/candidates/components/profile/recommended-selections";
 import { SkillsEditor } from "@/features/candidates/components/skills-editor";
 import { DocumentsPanel } from "@/features/documents/components/documents-panel";
 import { InterviewList } from "@/features/interviews/components/interview-list";
@@ -92,7 +97,21 @@ export default async function CandidatePage({ params, searchParams }: PageProps<
           },
         ]
       : []),
-    { value: "overview", label: "Panoramica", content: <OverviewPanel profile={profile} canEdit={canEdit} /> },
+    {
+      value: "overview",
+      label: "Panoramica",
+      content: (
+        <OverviewPanel
+          profile={profile}
+          canEdit={canEdit}
+          recommendations={
+            <Suspense fallback={<RecommendedSelectionsSkeleton />}>
+              <RecommendedSelections candidateId={id} canAdd={permissions.manage} />
+            </Suspense>
+          }
+        />
+      ),
+    },
     { value: "profile", label: "Profilo", content: <ProfilePanel profile={profile} canEdit={canEdit} /> },
     {
       value: "experience",

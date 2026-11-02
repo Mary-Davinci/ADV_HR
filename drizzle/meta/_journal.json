@@ -85,6 +85,13 @@
       "when": 1793353729721,
       "tag": "0011_public_careers",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793611198673,
+      "tag": "0012_notifications",
+      "breakpoints": true
     }
   ]
 }

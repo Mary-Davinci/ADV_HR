@@ -48,6 +48,11 @@ const serverEnvSchema = z.object({
   MAIL_FROM: z.string().trim().min(3).default("ADV_HR <noreply@localhost>"),
   /** Destinatario delle notifiche HR se l'autore della richiesta non ha un'email valida. */
   HR_NOTIFICATION_EMAIL: z.email().optional(),
+  /** Email a HR_NOTIFICATION_EMAIL per ogni candidatura dal sito (in attesa del via libera di HR). */
+  HR_EMAIL_ON_APPLICATION: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
   MAIL_OUTBOX_DIR: z.string().min(1).default("./storage/mail-outbox"),
 });
 

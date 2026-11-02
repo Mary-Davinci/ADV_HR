@@ -211,6 +211,8 @@ export interface PositionMatchQuery {
   selectionId: EntityId;
   /** Provincia del luogo di lavoro (sigla): per la vicinanza alla sede. */
   jobProvince?: string | null;
+  /** Limita il confronto a questi candidati (es. posizioni consigliate a un candidato). */
+  candidateIds?: EntityId[];
   limit: number;
 }
 

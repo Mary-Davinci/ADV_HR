@@ -14,6 +14,26 @@ import { positionKeywords } from "./matching/position-keywords";
 /** Candidati compatibili mostrati in una selezione (i più pertinenti per primi). */
 const COMPATIBLE_CANDIDATES_LIMIT = 100;
 
+/**
+ * Cosa cerca una selezione: figura e requisiti (da titolo e job description) e
+ * provincia della sede. Usato sia per i candidati compatibili di una selezione
+ * sia, al contrario, per le posizioni consigliate a un candidato.
+ */
+export async function selectionSearchProfile(store: ServiceContext["store"], selectionId: EntityId) {
+  const selection = await store.selections.getById(selectionId);
+  if (!selection) return null;
+  const [jobDescription, company] = await Promise.all([
+    store.jobDescriptions.getBySelection(selectionId),
+    store.companies.getById(selection.selection.companyId),
+  ]);
+  const keywords = positionKeywords({
+    titles: [selection.selection.title, jobDescription?.title],
+    requirements: [jobDescription?.requirements, jobDescription?.duties],
+    places: [company?.city, jobDescription?.locationCity, selection.companyName],
+  });
+  return { selection, keywords, jobProvince: jobDescription?.locationProvince ?? company?.province ?? null };
+}
+
 export function createCompanyService(context: ServiceContext) {
   const { store, actor } = context;
 
@@ -119,25 +139,17 @@ export function createSelectionService(context: ServiceContext) {
     async compatibleCandidates(id: EntityId) {
       assertCan(actor, "selection.read");
       assertCan(actor, "candidate.read");
-      const selection = await store.selections.getById(id);
-      if (!selection) return null;
-      const [jobDescription, company] = await Promise.all([
-        store.jobDescriptions.getBySelection(id),
-        store.companies.getById(selection.selection.companyId),
-      ]);
-      const keywords = positionKeywords({
-        titles: [selection.selection.title, jobDescription?.title],
-        requirements: [jobDescription?.requirements, jobDescription?.duties],
-        places: [company?.city, jobDescription?.locationCity, selection.companyName],
-      });
+      const profile = await selectionSearchProfile(store, id);
+      if (!profile) return null;
+      const { keywords, jobProvince } = profile;
       const { total, items } = await store.candidates.matchPosition({
         roleKeywords: keywords.role,
         bonusKeywords: keywords.bonus,
         selectionId: id,
-        jobProvince: jobDescription?.locationProvince ?? company?.province ?? null,
+        jobProvince,
         limit: COMPATIBLE_CANDIDATES_LIMIT,
       });
-      return { keywords, total, items, jobProvince: jobDescription?.locationProvince ?? company?.province ?? null };
+      return { keywords, total, items, jobProvince };
     },
 
     async create(input: SelectionInput): Promise<{ id: EntityId }> {

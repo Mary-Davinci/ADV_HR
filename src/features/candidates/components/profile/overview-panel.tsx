@@ -24,7 +24,16 @@ import { EditTrackingButton } from "../section-forms";
  * nome → data/ora colloquio → CF → nascita → residenza → L.68/99 →
  * esperienza → disponibilità → feedback recruiter. Sezioni verticali.
  */
-export function OverviewPanel({ profile, canEdit }: { profile: CandidateProfileView; canEdit: boolean }) {
+export function OverviewPanel({
+  profile,
+  canEdit,
+  recommendations,
+}: {
+  profile: CandidateProfileView;
+  canEdit: boolean;
+  /** Posizioni consigliate, caricate a parte dalla pagina (Suspense). */
+  recommendations?: React.ReactNode;
+}) {
   const { candidate } = profile;
   const next = profile.nextInterview;
   const age = getAge(candidate.birthDate);
@@ -143,6 +152,7 @@ export function OverviewPanel({ profile, canEdit }: { profile: CandidateProfileV
       </div>
 
       <aside className="space-y-6" aria-label="Riepilogo">
+        {recommendations}
         <DetailSection title="Riepilogo" icon={UserRound}>
           <dl className="grid gap-4">
             <DetailField label="Recruiter principale">{profile.primaryRecruiter?.displayName}</DetailField>

@@ -64,6 +64,17 @@ export class PostgresUserRepository implements UserRepository {
       .orderBy(asc(users.displayName));
   }
 
+  async listActiveWithRoles(roleCodes: readonly RoleCode[]): Promise<Array<UserRef & { email: string }>> {
+    if (roleCodes.length === 0) return [];
+    return this.db
+      .selectDistinct({ id: users.id, displayName: users.displayName, email: users.email })
+      .from(users)
+      .innerJoin(userRoles, eq(userRoles.userId, users.id))
+      .innerJoin(roles, eq(roles.id, userRoles.roleId))
+      .where(and(eq(users.active, true), inArray(roles.code, [...roleCodes])))
+      .orderBy(asc(users.displayName));
+  }
+
   async listActive(): Promise<UserRef[]> {
     return this.db
       .select({ id: users.id, displayName: users.displayName })

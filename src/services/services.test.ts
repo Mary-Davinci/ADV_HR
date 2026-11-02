@@ -323,4 +323,44 @@ describe("services", () => {
       expect(summary.recentActivities.length).toBeGreaterThan(0);
     });
   });
+
+  describe("posizioni consigliate", () => {
+    it("propone le selezioni aperte compatibili con il motivo, escluse quelle in cui è già candidato", async () => {
+      const candidateService = createCandidateService(ctx(actors.admin));
+      const [candidate] = (await testDb.store.candidates.search({ text: "Galli" })).items;
+      await testDb.store.candidates.addItem(candidate!.id, "experiences", {
+        companyName: "Impianti Srl",
+        roleTitle: "Saldatore a filo",
+        sector: null,
+        startDate: "2019-01-01",
+        endDate: "2024-01-01",
+        description: null,
+        currentRole: false,
+      });
+      const company = await testDb.db.execute(sql`SELECT id FROM companies LIMIT 1`);
+      const companyId = (company as unknown as { rows: Array<{ id: string }> }).rows[0]!.id;
+      const selection = await testDb.store.selections.create({
+        companyId,
+        title: "Saldatore",
+        status: "OPEN",
+        openedAt: NOW,
+        closedAt: null,
+        createdBy: actors.admin.id,
+      });
+
+      const recommended = await candidateService.recommendedSelections(candidate!.id);
+      expect(recommended.find((item) => item.selectionId === selection.id)).toMatchObject({
+        title: "Saldatore",
+        roleFoundIn: expect.arrayContaining(["EXPERIENCE"]),
+      });
+
+      await createApplicationService(ctx(actors.admin)).createMany({
+        selectionId: selection.id,
+        candidateIds: [candidate!.id],
+        source: "ADV_HR",
+      });
+      const after = await candidateService.recommendedSelections(candidate!.id);
+      expect(after.map((item) => item.selectionId)).not.toContain(selection.id);
+    });
+  });
 });
