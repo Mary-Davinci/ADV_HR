@@ -223,6 +223,8 @@ export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   CERTIFICATION: "Certificazione",
   IDENTITY_DOCUMENT: "Documento d'identità",
   JOB_DESCRIPTION: "Job description",
+  SKILLS_ASSESSMENT: "Bilancio delle competenze",
+  ORIENTATION: "Orientamento",
   CONTRACT: "Contratto",
   OTHER: "Altro",
 };

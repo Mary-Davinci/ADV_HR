@@ -136,6 +136,10 @@ function fakeApi() {
       if (id === 902) return { bytes: new TextEncoder().encode("firmato p7m"), mimeType: "application/pkcs7-mime" };
       return { bytes: PDF, mimeType: "application/pdf" };
     },
+    async downloadAttachment() {
+      state.downloads++;
+      return { bytes: PDF, mimeType: "application/pdf" };
+    },
   };
   return { state, client };
 }
@@ -356,5 +360,58 @@ describe("sincronizzazione ADV Core", () => {
     expect(summary.status).toBe("FAILED");
     expect(summary.errorMessage).toContain("IP non autorizzato");
     api.state.failWith = null;
+  });
+
+  it("allegati (API 1.1): bilancio e orientamento importati; l'orientamento non sovrascrive HR", async () => {
+    const attachment = (id: number, categoria: "BILANCIO_COMPETENZE" | "ORIENTAMENTO", inserted: string) => ({
+      ...cvMeta(id),
+      nome_documento: categoria === "ORIENTAMENTO" ? "Colloquio orientamento" : "Bilancio delle competenze",
+      categoria,
+      data_scadenza: null,
+      data_inserimento: inserted,
+    });
+    const mario = await candidateByLegacy(101);
+    const giulia = await candidateByLegacy(104);
+    // Orientamento già indicato a mano da HR per Giulia.
+    await testDb.db
+      .update(candidates)
+      .set({ orientationCompletedOn: "2026-02-01" })
+      .where(eq(candidates.id, String(giulia!.id)));
+    api.state.candidates = api.state.candidates.map((c) =>
+      c.id === 101
+        ? {
+            ...c,
+            allegati: [
+              attachment(951, "BILANCIO_COMPETENZE", "2025-02-01 09:00:00"),
+              attachment(952, "ORIENTAMENTO", "2025-03-10 09:00:00"),
+            ],
+          }
+        : c.id === 104
+          ? { ...c, allegati: [attachment(953, "ORIENTAMENTO", "2025-04-01 09:00:00")] }
+          : c,
+    );
+
+    const summary = await sync();
+    expect(summary.status).toBe("SUCCESS");
+    expect(summary.stats).toMatchObject({ attachmentCreated: 3, orientationSet: 1 });
+    // Gli allegati non fanno rielaborare l'anagrafica.
+    expect(summary.stats.candidatesUpdated ?? 0).toBe(0);
+
+    const marioDocs = await testDb.db
+      .select({ type: documents.type, filename: documents.filename })
+      .from(documents)
+      .where(eq(documents.candidateId, String(mario!.id)));
+    expect(marioDocs.map((d) => d.type).sort()).toEqual(["CV", "ORIENTATION", "SKILLS_ASSESSMENT"]);
+    expect(marioDocs.find((d) => d.type === "SKILLS_ASSESSMENT")?.filename).toBe(
+      "Bilancio competenze ADV Core 951.pdf",
+    );
+    expect((await candidateByLegacy(101))!.orientation_completed_on).toBe("2025-03-10");
+    expect((await candidateByLegacy(104))!.orientation_completed_on).toBe("2026-02-01");
+
+    // Seconda esecuzione: file invariati, nessun nuovo download.
+    const downloads = api.state.downloads;
+    const again = await sync();
+    expect(again.stats.attachmentUnchanged).toBe(3);
+    expect(api.state.downloads).toBe(downloads);
   });
 });

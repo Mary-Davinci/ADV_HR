@@ -182,40 +182,25 @@ SELECT started_at, status, stats, error_message FROM adv_core_sync_runs ORDER BY
 4. Nessuna scrittura su ADV CORE; credenziali solo in variabili d'ambiente.
 5. Nei log solo conteggi e id ADV CORE.
 
-## Estensione API richiesta: allegati di candidati e aziende
+## Allegati dei candidati (API 1.1, in uso da novembre 2026)
 
-Oggi l'API espone solo i CV (`cv[]`). HR ha bisogno anche degli altri allegati, che in ADV CORE
-stanno in `allegati_iscritto` (candidati) e `allegati_azienda` (aziende): Tessera Sanitaria,
-carta d'identità, DRU, Assessment, Privacy, PIP, SGA, PSP, Patto di servizio, **Bilancio delle
-competenze**, job description compilate dalle aziende, ...
+Specifica completa: [ADV_CORE_API_ALLEGATI.md](ADV_CORE_API_ALLEGATI.md). L'API espone **solo** due categorie,
+con whitelist nella vista `api_v1_allegati` (minimizzazione: documenti d'identità, tessere
+sanitarie, DRU, PIP e simili non escono da ADV CORE):
 
-Proposta, sullo stesso modello di `cv[]` (sola lettura, stessa chiave e restrizione IP):
+| `categoria` ADV CORE  | Tipo documento in ADV_HR | Effetto                                                                                                              |
+| --------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `BILANCIO_COMPETENZE` | `SKILLS_ASSESSMENT`      | visibile in Documenti e nella sezione "Percorso" della scheda candidato                                              |
+| `ORIENTAMENTO`        | `ORIENTATION`            | come sopra; imposta "orientamento completato" (data di inserimento in ADV CORE) **solo se HR non l'ha già indicato** |
 
-- in `candidati.php` e `aziende.php`, un array `allegati[]` per record:
+Stessa logica dei CV: un record `DOCUMENT` per allegato in `adv_core_records`, nuovo download solo se
+cambiano dimensione o data del file, formati non gestiti saltati e annotati. Statistiche:
+`attachmentCreated/Updated/Unchanged/Skipped/Errors`, `orientationSet`. Con l'API 1.0 (senza
+`allegati[]`) il sync continua a funzionare come prima.
 
-  ```json
-  {
-    "id": 4512,
-    "nome_documento": "BILANCIO DELLE COMPETENZE PILLE PUUSEPP",
-    "numero_documento": null,
-    "rilasciato_da": null,
-    "data_scadenza": null,
-    "tipo_file": "application/pdf",
-    "disponibile": true,
-    "dimensione_bytes": 182344,
-    "file_modificato_il": "2025-08-09 10:12:00",
-    "data_inserimento": "2025-08-09 10:12:00"
-  }
-  ```
-
-  `data_scadenza` `0000-00-00` → `null`; `disponibile` = il file esiste su disco.
-
-- `allegato.php?id=...&tipo=iscritto|azienda`: scarica il file, come il download dei CV.
-- I CV già esposti in `cv[]` non vanno ripetuti in `allegati[]`.
-
-In ADV_HR: ogni allegato diventa un `documents` collegato al candidato o all'azienda, con il
-tipo dedotto dal `nome_documento` (il nome originale resta visibile). Questo abilita il filtro
-"ha il bilancio delle competenze" e la comparsa delle job description delle aziende.
+Prima esecuzione reale (2 novembre 2026, database del PC ufficio): 2.503 allegati importati
+(1.880 bilanci per 1.839 candidati, 623 orientamenti), 4 in formato non gestito, 623 candidati con
+orientamento impostato, nessuna anagrafica rielaborata.
 
 ## Prossimi passi possibili
 

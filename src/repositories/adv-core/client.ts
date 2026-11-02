@@ -14,6 +14,15 @@ export interface AdvCoreCv {
   data_inserimento: string | null;
 }
 
+/** Categorie di allegati esposte dall'API 1.1 (solo quelle ammesse lato ADV CORE). */
+export type AdvCoreAttachmentCategory = "BILANCIO_COMPETENZE" | "ORIENTAMENTO";
+
+/** Allegato del candidato (API 1.1): come un CV, più categoria e scadenza. */
+export interface AdvCoreAttachment extends AdvCoreCv {
+  categoria: AdvCoreAttachmentCategory;
+  data_scadenza: string | null;
+}
+
 /** Candidato ADV CORE. I campi testuali vuoti arrivano già come null. */
 export interface AdvCoreCandidate {
   id: number;
@@ -63,6 +72,8 @@ export interface AdvCoreCandidate {
   data_ultima_modifica: string | null;
   data_cancellazione: string | null;
   cv: AdvCoreCv[];
+  /** Assente con l'API 1.0: bilancio delle competenze e orientamento. */
+  allegati?: AdvCoreAttachment[];
   /** Presente solo se ADV CORE ha abilitato l'esposizione dei dati particolari. */
   dati_protetti?: { collocamento_mirato: string | null; soggetto_svantaggiato: string | null };
 }
@@ -115,6 +126,8 @@ export interface AdvCoreStatus {
   api_version: string;
   candidati: number;
   cv: number;
+  /** Dall'API 1.1. */
+  allegati?: number;
   aziende: number;
   sedi: number;
   dati_protetti_esposti: boolean;
@@ -130,6 +143,8 @@ export interface AdvCoreClient {
   listCandidates(): Promise<AdvCoreCandidate[]>;
   listCompanies(): Promise<AdvCoreCompany[]>;
   downloadCv(id: number): Promise<AdvCoreFile>;
+  /** API 1.1: scarica un allegato ammesso (bilancio, orientamento). */
+  downloadAttachment(id: number): Promise<AdvCoreFile>;
 }
 
 /** Errore restituito dall'API: `code` è il codice applicativo (es. ip_not_allowed). */
@@ -223,10 +238,13 @@ export function createAdvCoreClient(options: AdvCoreClientOptions): AdvCoreClien
     },
     listCandidates: () => listAll<AdvCoreCandidate>("candidati.php"),
     listCompanies: () => listAll<AdvCoreCompany>("aziende.php"),
-    async downloadCv(id: number) {
-      const response = await request(`cv.php?id=${id}`);
-      const mimeType = (response.headers.get("content-type") ?? "application/octet-stream").split(";")[0]!.trim();
-      return { bytes: new Uint8Array(await response.arrayBuffer()), mimeType };
-    },
+    downloadCv: (id: number) => download(`cv.php?id=${id}`),
+    downloadAttachment: (id: number) => download(`allegato.php?id=${id}`),
   };
+
+  async function download(path: string): Promise<AdvCoreFile> {
+    const response = await request(path);
+    const mimeType = (response.headers.get("content-type") ?? "application/octet-stream").split(";")[0]!.trim();
+    return { bytes: new Uint8Array(await response.arrayBuffer()), mimeType };
+  }
 }

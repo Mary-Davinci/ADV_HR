@@ -37,7 +37,7 @@ import type { Database } from "@/repositories/postgres";
 import { validateUpload } from "@/services/document-service";
 import type { DocumentStorage } from "@/services/storage/document-storage";
 
-import type { AdvCoreCandidate, AdvCoreClient, AdvCoreCompany } from "./client";
+import type { AdvCoreAttachmentCategory, AdvCoreCandidate, AdvCoreClient, AdvCoreCompany, AdvCoreCv } from "./client";
 import {
   ADV_CORE_POLICY_NOTE_PREFIX,
   mapCandidate,
@@ -80,6 +80,41 @@ type Stats = Record<string, number>;
 type RecordRow = typeof advCoreRecords.$inferSelect;
 
 const removedReasons = { deleted: "CANCELLATO_IN_ADV_CORE", missing: "NON_PIU_PRESENTE" } as const;
+
+/** File del candidato importati da ADV CORE: CV (`cv[]`) e allegati ammessi (`allegati[]`, API 1.1). */
+const CANDIDATE_FILE_KINDS = ["CV", "SKILLS_ASSESSMENT", "ORIENTATION"] as const;
+type CandidateFileKind = (typeof CANDIDATE_FILE_KINDS)[number];
+const ATTACHMENT_KINDS: Record<AdvCoreAttachmentCategory, CandidateFileKind> = {
+  BILANCIO_COMPETENZE: "SKILLS_ASSESSMENT",
+  ORIENTAMENTO: "ORIENTATION",
+};
+/** Prefisso delle statistiche: i contatori dei CV restano quelli di sempre (cvCreated…). */
+const FILE_STATS: Record<CandidateFileKind, string> = {
+  CV: "cv",
+  SKILLS_ASSESSMENT: "attachment",
+  ORIENTATION: "attachment",
+};
+/** Inizio del nome file in ADV_HR e del messaggio di log. */
+const FILE_LABELS: Record<CandidateFileKind, string> = {
+  CV: "CV",
+  SKILLS_ASSESSMENT: "Bilancio competenze",
+  ORIENTATION: "Orientamento",
+};
+
+interface CandidateFileJob {
+  candidateLegacyId: string;
+  file: AdvCoreCv;
+  kind: CandidateFileKind;
+}
+
+/** Versione del file: si riscarica solo se dimensione o data di modifica cambiano. */
+const fileVersion = (file: AdvCoreCv) => `${file.dimensione_bytes ?? ""}|${file.file_modificato_il ?? ""}`;
+
+/** "2023-07-20 14:10:13" → "2023-07-20"; null se assente o non plausibile. */
+function isoDay(value: string | null): string | null {
+  const day = value?.slice(0, 10) ?? "";
+  return /^\d{4}-\d{2}-\d{2}$/.test(day) && day >= "2000-01-01" ? day : null;
+}
 
 function hashPayload(payload: unknown): string {
   return createHash("sha256")
@@ -389,8 +424,8 @@ export async function runAdvCoreSync(options: SyncOptions): Promise<SyncSummary>
   async function processCandidate(row: AdvCoreCandidate, record: RecordRow | undefined) {
     const legacyId = String(row.id);
     const removed = Boolean(row.data_cancellazione);
-    // I CV hanno un ciclo proprio: non devono far rielaborare l'anagrafica.
-    const { cv: _cv, ...payload } = row;
+    // CV e allegati hanno un ciclo proprio: non devono far rielaborare l'anagrafica.
+    const { cv: _cv, allegati: _allegati, ...payload } = row;
     const payloadHash = hashPayload(payload);
     if (record && record.payloadHash === payloadHash && record.removedReason !== removedReasons.missing)
       return "unchanged";
@@ -519,57 +554,65 @@ export async function runAdvCoreSync(options: SyncOptions): Promise<SyncSummary>
     }
   }
 
-  /* ---------------- CV ---------------- */
+  /* ---------------- CV e allegati ---------------- */
 
   async function syncDocuments(rows: AdvCoreCandidate[]) {
+    // CV e allegati sono righe di `allegati_iscritto` in ADV CORE: stessi id, mai sovrapposti.
     const records = await loadRecords("DOCUMENT");
-    const unchanged: string[] = [];
-    const queue: Array<{ candidateLegacyId: string; cv: AdvCoreCandidate["cv"][number] }> = [];
+    const unchanged: Record<CandidateFileKind, string[]> = { CV: [], SKILLS_ASSESSMENT: [], ORIENTATION: [] };
+    const queue: CandidateFileJob[] = [];
     for (const row of rows) {
       if (row.data_cancellazione) continue;
-      for (const cv of row.cv ?? []) {
-        if (!cv.disponibile) continue;
-        const version = `${cv.dimensione_bytes ?? ""}|${cv.file_modificato_il ?? ""}`;
-        const record = records.get(String(cv.id));
-        if (record && record.fileVersion === version) unchanged.push(String(cv.id));
-        else queue.push({ candidateLegacyId: String(row.id), cv });
+      const files = [
+        ...(row.cv ?? []).map((file) => ({ file, kind: "CV" as const })),
+        ...(row.allegati ?? []).flatMap((file) => {
+          const kind = ATTACHMENT_KINDS[file.categoria];
+          return kind ? [{ file, kind }] : [];
+        }),
+      ];
+      for (const { file, kind } of files) {
+        if (!file.disponibile) continue;
+        const record = records.get(String(file.id));
+        if (record && record.fileVersion === fileVersion(file)) unchanged[kind].push(String(file.id));
+        else queue.push({ candidateLegacyId: String(row.id), file, kind });
       }
     }
-    await touchSeen("DOCUMENT", unchanged);
-    bump("cvUnchanged", unchanged.length);
+    for (const kind of CANDIDATE_FILE_KINDS) {
+      await touchSeen("DOCUMENT", unchanged[kind]);
+      bump(`${FILE_STATS[kind]}Unchanged`, unchanged[kind].length);
+    }
 
     const worker = async () => {
       for (let job = queue.shift(); job; job = queue.shift()) {
         try {
-          await importCv(job.candidateLegacyId, job.cv, records.get(String(job.cv.id)));
+          await importCandidateFile(job, records.get(String(job.file.id)));
         } catch (error) {
-          bump("cvErrors");
-          log(`CV ${job.cv.id}: errore - ${errorText(error)}`);
+          bump(`${FILE_STATS[job.kind]}Errors`);
+          log(`${FILE_LABELS[job.kind]} ${job.file.id}: errore - ${errorText(error)}`);
         }
       }
     };
     await Promise.all(Array.from({ length: options.documentConcurrency ?? 4 }, worker));
   }
 
-  async function importCv(
-    candidateLegacyId: string,
-    cv: AdvCoreCandidate["cv"][number],
-    record: RecordRow | undefined,
-  ) {
-    const legacyId = String(cv.id);
-    const version = `${cv.dimensione_bytes ?? ""}|${cv.file_modificato_il ?? ""}`;
+  async function importCandidateFile({ candidateLegacyId, file: remote, kind }: CandidateFileJob, record?: RecordRow) {
+    const legacyId = String(remote.id);
+    const version = fileVersion(remote);
+    const stat = FILE_STATS[kind];
     const candidateId = await findMapping(db, "CANDIDATE", candidateLegacyId);
     if (!candidateId) return;
 
-    const file = await options.client.downloadCv(cv.id);
-    const mimeType = cv.tipo_file && ALLOWED_DOCUMENT_MIME_TYPES[cv.tipo_file] ? cv.tipo_file : file.mimeType;
+    const file =
+      kind === "CV" ? await options.client.downloadCv(remote.id) : await options.client.downloadAttachment(remote.id);
+    const mimeType =
+      remote.tipo_file && ALLOWED_DOCUMENT_MIME_TYPES[remote.tipo_file] ? remote.tipo_file : file.mimeType;
     const extension = ALLOWED_DOCUMENT_MIME_TYPES[mimeType]?.[0] ?? "";
-    const filename = `CV ADV Core ${cv.id}${extension}`;
+    const filename = `${FILE_LABELS[kind]} ADV Core ${remote.id}${extension}`;
     try {
       validateUpload({ name: filename, mimeType, bytes: file.bytes });
     } catch (error) {
       // Formato non gestito da ADV_HR (es. .p7m firmato): non si riprova finché il file non cambia.
-      bump("cvSkipped");
+      bump(`${stat}Skipped`);
       await saveRecord(db, "DOCUMENT", legacyId, {
         fileVersion: version,
         skippedReason: errorText(error).slice(0, 120),
@@ -577,7 +620,7 @@ export async function runAdvCoreSync(options: SyncOptions): Promise<SyncSummary>
       return;
     }
 
-    const storageKey = `adv-core/cv/${randomUUID()}`;
+    const storageKey = `adv-core/${kind === "CV" ? "cv" : "allegati"}/${randomUUID()}`;
     await storage.put(storageKey, file.bytes);
     let oldKey: string | null = null;
     try {
@@ -599,13 +642,13 @@ export async function runAdvCoreSync(options: SyncOptions): Promise<SyncSummary>
               sizeBytes: file.bytes.byteLength,
             })
             .where(eq(documents.id, documentId));
-          bump("cvUpdated");
+          bump(`${stat}Updated`);
         } else {
           const [inserted] = await tx
             .insert(documents)
             .values({
               candidateId,
-              type: "CV",
+              type: kind,
               filename,
               storageProvider: storage.provider,
               storageKey,
@@ -617,8 +660,19 @@ export async function runAdvCoreSync(options: SyncOptions): Promise<SyncSummary>
           await tx
             .insert(legacyMappings)
             .values({ entityType: "DOCUMENT", advHrId: inserted!.id, legacySystem: "ADV_CORE", legacyId });
-          await audit(tx, "DOCUMENT", inserted!.id, "UPLOAD", { legacyId, type: "CV" }, { candidateId });
-          bump("cvCreated");
+          await audit(tx, "DOCUMENT", inserted!.id, "UPLOAD", { legacyId, type: kind }, { candidateId });
+          bump(`${stat}Created`);
+        }
+        // Allegato di orientamento: orientamento completato alla data di inserimento in ADV CORE,
+        // solo se HR non l'ha già indicato (il dato inserito a mano resta prevalente).
+        const completedOn = kind === "ORIENTATION" ? isoDay(remote.data_inserimento) : null;
+        if (completedOn) {
+          const updated = await tx
+            .update(candidates)
+            .set({ orientationCompletedOn: completedOn })
+            .where(and(eq(candidates.id, candidateId), isNull(candidates.orientationCompletedOn)))
+            .returning({ id: candidates.id });
+          bump("orientationSet", updated.length);
         }
         await saveRecord(tx, "DOCUMENT", legacyId, {
           fileVersion: version,
@@ -637,7 +691,10 @@ export async function runAdvCoreSync(options: SyncOptions): Promise<SyncSummary>
 
   try {
     const remote = await client.status();
-    log(`ADV Core: ${remote.candidati} candidati, ${remote.aziende} aziende, ${remote.cv} CV`);
+    log(
+      `ADV Core (API ${remote.api_version}): ${remote.candidati} candidati, ${remote.aziende} aziende, ${remote.cv} CV` +
+        (remote.allegati !== undefined ? `, ${remote.allegati} allegati` : ""),
+    );
     const companyRows = await client.listCompanies();
     const candidateRows = await client.listCandidates();
     stats.remoteCompanies = companyRows.length;
@@ -682,7 +739,8 @@ export async function runAdvCoreSync(options: SyncOptions): Promise<SyncSummary>
 
     if (options.syncDocuments ?? true) await syncDocuments(candidateRows);
 
-    const errors = (stats.candidateErrors ?? 0) + (stats.companyErrors ?? 0) + (stats.cvErrors ?? 0);
+    const errors =
+      (stats.candidateErrors ?? 0) + (stats.companyErrors ?? 0) + (stats.cvErrors ?? 0) + (stats.attachmentErrors ?? 0);
     if (errors > 0) {
       status = "PARTIAL";
       errorMessage = [errorMessage, `${errors} record con errori (dettaglio nel log del worker).`]

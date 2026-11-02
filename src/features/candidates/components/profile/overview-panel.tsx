@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, CalendarClock, IdCard, MessageSquareText, Route, UserRound } from "lucide-react";
+import { BriefcaseBusiness, CalendarClock, FileText, IdCard, MessageSquareText, Route, UserRound } from "lucide-react";
 import Link from "next/link";
 
 import { DetailField, DetailList, DetailSection } from "@/components/common/detail-section";
@@ -13,11 +13,45 @@ import {
   labelOf,
   PROTECTED_CATEGORY_LABELS,
 } from "@/config/labels";
-import { getTotalExperienceMonths } from "@/domain";
+import { getTotalExperienceMonths, type DocumentMetadata, type DocumentType } from "@/domain";
 import { formatDate, formatDateTime, formatLongDate, formatMonths, formatTime, getAge } from "@/lib/format";
 import type { CandidateProfileView } from "@/services/candidate-service";
 
 import { EditTrackingButton } from "../section-forms";
+
+/** Formati che il browser apre in una nuova scheda (gli altri si scaricano). */
+const VIEWABLE = new Set(["application/pdf", "image/jpeg", "image/png"]);
+
+/**
+ * Collegamenti ai documenti di un tipo (es. bilancio delle competenze), dal più recente.
+ * Senza data: per gli allegati di ADV Core sarebbe quella di importazione, non del documento.
+ */
+function DocumentLinks({ documents, type }: { documents: DocumentMetadata[]; type: DocumentType }) {
+  const matching = documents
+    .filter((document) => document.type === type)
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  if (matching.length === 0) return null;
+  return (
+    <span className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+      {matching.map((document, index) => {
+        const viewable = VIEWABLE.has(document.mimeType);
+        return (
+          <a
+            key={document.id}
+            href={`/api/documents/${document.id}${viewable ? "?view=1" : ""}`}
+            {...(viewable ? { target: "_blank", rel: "noopener" } : {})}
+            className="inline-flex items-center gap-1 text-sm font-medium underline-offset-4 hover:underline"
+            title={document.filename}
+          >
+            <FileText aria-hidden="true" className="size-3.5" />
+            {viewable ? "Apri" : "Scarica"}
+            {matching.length > 1 && ` (${index + 1})`}
+          </a>
+        );
+      })}
+    </span>
+  );
+}
 
 /**
  * Panoramica. Ordine informativo concordato con HR:
@@ -201,6 +235,14 @@ export function OverviewPanel({
                 </span>
               ) : (
                 "Non completato"
+              )}
+              <DocumentLinks documents={profile.documents} type="ORIENTATION" />
+            </DetailField>
+            <DetailField label="Bilancio delle competenze">
+              {profile.documents.some((document) => document.type === "SKILLS_ASSESSMENT") ? (
+                <DocumentLinks documents={profile.documents} type="SKILLS_ASSESSMENT" />
+              ) : (
+                "Non presente"
               )}
             </DetailField>
             <DetailField label="Politiche attive sottoscritte">
