@@ -151,7 +151,7 @@ export const CANDIDATE_ORIGIN_LABELS: Record<CandidateOrigin, string> = {
   INDEED: "Indeed",
   LINKEDIN: "LinkedIn",
   MANUAL: "Inserito a mano",
-  WEBSITE: "Sito web",
+  WEBSITE: "Sito candidature",
 };
 
 export const SELECTION_STATUS_LABELS: Record<SelectionStatus, string> = {

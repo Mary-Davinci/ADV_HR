@@ -23,7 +23,8 @@
     "cv:index": "tsx --env-file-if-exists=.env.local src/services/cv-text/run-index.ts",
     "storage:to-s3": "tsx --env-file-if-exists=.env.local src/services/storage/run-migrate-to-s3.ts",
     "storage:backup": "tsx src/services/storage/run-backup.ts",
-    "user": "tsx --env-file-if-exists=.env.local src/db/users.ts"
+    "user": "tsx --env-file-if-exists=.env.local src/db/users.ts",
+    "import:zoho-postings": "tsx --env-file-if-exists=.env.local src/db/import-zoho-postings.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1147.0",

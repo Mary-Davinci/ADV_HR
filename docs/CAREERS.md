@@ -23,7 +23,7 @@ Ritiro, scadenza o chiusura della selezione nascondono l’offerta e bloccano i 
 - CV nello storage privato esistente, incluso nei backup documentali. Download richiede login e permesso documenti. Verifica di estensione, tipo, firma e dimensioni; **non è una scansione antivirus**.
 - Pagine con token: `no-store`, `no-referrer`, `noindex`. Nessun dato o CV viene inviato a Zoho.
 - Informativa: <https://www.davinciformazione.com/privacy-policy/>, versione registrata `2026-10-30`. Il riferimento non sostituisce la verifica del titolare circa finalità, conservazione e gestione dei diritti. Non viene raccolto consenso marketing.
-- Nessun import automatico di annunci o candidature storiche da Zoho. I vecchi URL degli annunci sotto `/jobs/Careers/...` mostrano un avviso e i collegamenti alle offerte attuali.
+- Nessun import automatico da Zoho e nessuna candidatura storica. Gli 8 annunci Zoho ancora pubblicati del 2025-2026 con azienda nota (export del 2 novembre 2026) si importano una tantum con `npm run import:zoho-postings` (anteprima) e `-- --apply`: ogni annuncio diventa una selezione Aperta con annuncio **in bozza**, da rivedere e pubblicare dalla scheda Sito pubblico. I 5 annunci senza azienda cliente (ZR_325, ZR_343-346) vanno creati a mano. I vecchi URL degli annunci sotto `/jobs/Careers/...` mostrano un avviso e i collegamenti alle offerte attuali.
 
 ## Passaggio da Zoho
 

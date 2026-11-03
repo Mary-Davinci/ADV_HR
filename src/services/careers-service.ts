@@ -3,7 +3,14 @@ import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { and, desc, eq, gt, isNotNull, or, isNull, sql } from "drizzle-orm";
 import type { z } from "zod";
 
-import { candidates, careerChallenges, careerPostings, careerSubmissions, recruitmentSelections } from "@/db/schema";
+import {
+  candidates,
+  careerChallenges,
+  careerPostings,
+  careerSubmissions,
+  companies,
+  recruitmentSelections,
+} from "@/db/schema";
 import type { SessionUser } from "@/domain";
 import { DomainRuleError, INITIAL_STAGE_CODE } from "@/domain";
 import { CAREERS_PRIVACY_URL, CAREERS_PRIVACY_VERSION, type CareerBoard } from "@/domain/careers";
@@ -105,6 +112,42 @@ export function createCareersService(deps: CareersDependencies) {
         .where(and(eq(careerPostings.slug, slug), visible()))
         .limit(1);
       return rows[0] ?? null;
+    },
+    /** Elenco interno di tutti gli annunci (bozze comprese), con le candidature ricevute dal sito. */
+    async overview(actor: SessionUser) {
+      assertCan(actor, "selection.read");
+      const rows = await db
+        .select({
+          selectionId: careerPostings.selectionId,
+          companyId: recruitmentSelections.companyId,
+          companyName: companies.name,
+          selectionStatus: recruitmentSelections.status,
+          slug: careerPostings.slug,
+          board: careerPostings.board,
+          title: sql<string>`${careerPostings.content}->>'title'`,
+          publishedAt: careerPostings.publishedAt,
+          expiresAt: careerPostings.expiresAt,
+          updatedAt: careerPostings.updatedAt,
+          submissions: sql<number>`(SELECT count(*)::int FROM ${careerSubmissions} WHERE ${careerSubmissions.postingId} = ${careerPostings.id})`,
+        })
+        .from(careerPostings)
+        .innerJoin(recruitmentSelections, eq(recruitmentSelections.id, careerPostings.selectionId))
+        .innerJoin(companies, eq(companies.id, recruitmentSelections.companyId))
+        .orderBy(desc(careerPostings.updatedAt));
+      const current = now();
+      return {
+        portalEnabled: deps.publicEnabled,
+        items: rows.map((row) => ({
+          ...row,
+          state: !row.publishedAt
+            ? ("DRAFT" as const)
+            : row.expiresAt && row.expiresAt <= current
+              ? ("EXPIRED" as const)
+              : row.selectionStatus !== "OPEN"
+                ? ("HIDDEN" as const)
+                : ("PUBLISHED" as const),
+        })),
+      };
     },
     async publication(actor: SessionUser, selectionId: string) {
       assertCan(actor, "selection.read");

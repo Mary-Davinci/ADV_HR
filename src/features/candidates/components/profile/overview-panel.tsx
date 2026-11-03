@@ -17,6 +17,7 @@ import { getTotalExperienceMonths, type DocumentMetadata, type DocumentType } fr
 import { formatDate, formatDateTime, formatLongDate, formatMonths, formatTime, getAge } from "@/lib/format";
 import type { CandidateProfileView } from "@/services/candidate-service";
 
+import { OriginBadge } from "../origin-badge";
 import { EditTrackingButton } from "../section-forms";
 
 /** Formati che il browser apre in una nuova scheda (gli altri si scaricano). */
@@ -227,7 +228,12 @@ export function OverviewPanel({
           action={canEdit ? <EditTrackingButton candidate={candidate} /> : undefined}
         >
           <dl className="grid gap-4">
-            <DetailField label="Origine">{CANDIDATE_ORIGIN_LABELS[candidate.origin]}</DetailField>
+            <DetailField label="Origine">
+              <span className="inline-flex items-center gap-2">
+                <OriginBadge origin={candidate.origin} className="size-6" />
+                {CANDIDATE_ORIGIN_LABELS[candidate.origin]}
+              </span>
+            </DetailField>
             <DetailField label="Orientamento">
               {candidate.orientationCompletedOn ? (
                 <span className="text-emerald-700 dark:text-emerald-400">

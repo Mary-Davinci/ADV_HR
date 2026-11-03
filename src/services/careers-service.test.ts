@@ -93,6 +93,24 @@ describe("public careers", () => {
     expect((await service().list("aziende")).map((item) => item.id)).toContain(posting.id);
     expect((await service().list("Careers")).map((item) => item.id)).not.toContain(posting.id);
   });
+  it("lists every posting internally with its public state and website applications", async () => {
+    const { input, selection } = await newPosting();
+    const posting = await service().publish(admin, input);
+    const find = async () => (await service().overview(admin)).items.find((item) => item.selectionId === selection.id);
+    expect(await find()).toMatchObject({ title: input.title, state: "PUBLISHED", submissions: 0 });
+    const { token } = await link(posting.id);
+    await service().submit(application(token), pdf, randomUUID());
+    expect(await find()).toMatchObject({ submissions: 1 });
+    await test.db
+      .update(recruitmentSelections)
+      .set({ status: "PAUSED" })
+      .where(eq(recruitmentSelections.id, selection.id));
+    expect(await find()).toMatchObject({ state: "HIDDEN" });
+    await service().unpublish(admin, selection.id);
+    expect(await find()).toMatchObject({ state: "DRAFT" });
+    const viewer = { ...admin, roles: [] as RoleCode[] };
+    await expect(service().overview(viewer)).rejects.toThrow();
+  });
   it("disables all public reads and submissions while retaining internal publication records", async () => {
     const { input } = await newPosting();
     const posting = await service().publish(admin, input);

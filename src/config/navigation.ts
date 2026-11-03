@@ -3,6 +3,7 @@ import {
   Briefcase,
   Building2,
   CalendarDays,
+  Globe,
   LayoutDashboard,
   ListTodo,
   MessagesSquare,
@@ -42,6 +43,7 @@ export const MAIN_NAVIGATION: NavGroup[] = [
     items: [
       { title: "Candidati", href: "/recruiting", icon: UserSearch, permission: "candidate.read" },
       { title: "Selezioni", href: "/selections", icon: Briefcase, permission: "selection.read" },
+      { title: "Annunci sito", href: "/careers", icon: Globe, permission: "selection.read" },
       { title: "Colloqui", href: "/interviews", icon: MessagesSquare, permission: "interview.read" },
       { title: "Calendario", href: "/calendar", icon: CalendarDays, permission: "interview.read" },
       ...(FEATURES.talentPools

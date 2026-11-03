@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Candidatura dal sito Accademia Da Vinci">
+  <circle cx="32" cy="32" r="32" fill="#F0B400"/>
+  <rect x="11" y="15" width="42" height="34" rx="5" fill="#FFFFFF"/>
+  <path d="M11 20a5 5 0 0 1 5-5h32a5 5 0 0 1 5 5v3H11z" fill="#6F6F6E"/>
+  <circle cx="16.5" cy="19.2" r="1.5" fill="#F0B400"/>
+  <circle cx="21.5" cy="19.2" r="1.5" fill="#FFFFFF"/>
+  <path fill="#6F6F6E" fill-rule="evenodd" d="M23 26.5h9.5a10.5 10.5 0 0 1 0 21H23v-2h2.4V28.5H23zm7 3v15h2.3a7.5 7.5 0 0 0 0-15z"/>
+</svg>

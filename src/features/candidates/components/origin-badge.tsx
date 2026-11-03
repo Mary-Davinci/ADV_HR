@@ -1,4 +1,4 @@
-import { Globe, UserRound } from "lucide-react";
+import { UserRound } from "lucide-react";
 import Image from "next/image";
 
 import { CANDIDATE_ORIGIN_LABELS } from "@/config/labels";
@@ -7,8 +7,9 @@ import { cn } from "@/lib/utils";
 
 /**
  * Cerchietto con il segno della provenienza del candidato: il marchio di
- * Accademia Da Vinci per ADV Core, il segno delle piattaforme di annunci
- * (iniziale nei loro colori, non il logo registrato), una persona se inserito a mano.
+ * Accademia Da Vinci per ADV Core, il segno del sito candidature (finestra con la D
+ * su fondo oro) per chi si è candidato dal nostro sito, il segno delle piattaforme di
+ * annunci (iniziale nei loro colori, non il logo registrato), una persona se inserito a mano.
  */
 export function OriginBadge({ origin, className }: { origin: CandidateOrigin; className?: string }) {
   const label = `Origine: ${CANDIDATE_ORIGIN_LABELS[origin]}`;
@@ -21,6 +22,7 @@ export function OriginBadge({ origin, className }: { origin: CandidateOrigin; cl
         origin === "LINKEDIN" && "border-transparent bg-[#0a66c2] text-white",
         origin === "INDEED" && "border-transparent bg-[#2164f3] text-white",
         origin === "MANUAL" && "bg-muted text-muted-foreground",
+        origin === "WEBSITE" && "border-transparent bg-[#f0b400]",
         className,
       )}
     >
@@ -39,7 +41,9 @@ export function OriginBadge({ origin, className }: { origin: CandidateOrigin; cl
         </span>
       )}
       {origin === "MANUAL" && <UserRound aria-hidden="true" className="size-3.5" />}
-      {origin === "WEBSITE" && <Globe aria-hidden="true" className="size-3.5" />}
+      {origin === "WEBSITE" && (
+        <Image src="/brand/sito-candidature.svg" alt="" width={28} height={28} unoptimized className="size-full" />
+      )}
     </span>
   );
 }
