@@ -160,8 +160,14 @@ Codice in `src/repositories/adv-core/mapping.ts` (funzioni pure, testate).
 | CV (`cv[]`)                                                                                                                                                       | `documents` tipo `CV`                          | formati non gestiti (es. `.p7m`) saltati e annotati                     |
 | `denominazione`, `partita_iva`, `codice_fiscale`, `codice_ateco`, `comune`, `provincia_sigla`, `regione`, `email`/`pec`, `telefono`, `informazioni`+`annotazioni` | `companies.*`                                  | `source = ADV_CORE`                                                     |
 
+Patente, `competenze_linguistiche`, `competenze_informatiche` e `certificazioni` vengono scritte solo
+se la relativa sezione della scheda è vuota: le lingue senza un livello riconoscibile non vengono create
+e il testo originale resta nelle note. `settore_esperienza` ed `esperienza_anni/mesi` vanno in
+`candidate_profiles.experience_*` con il merge a tre vie: ADV CORE non indica azienda e date, quindi non
+creano righe in Esperienze.
+
 Tutto il payload ricevuto resta in `adv_core_records.payload` (campi non ancora mappati come
-competenze testuali, patente, note di colloquio, sedi operative delle aziende).
+`settore_interesse`, note di colloquio, sedi operative delle aziende).
 
 ## Tabelle
 

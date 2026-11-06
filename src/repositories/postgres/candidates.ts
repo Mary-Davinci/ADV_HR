@@ -78,6 +78,7 @@ function toCandidate(row: CandidateRow): Candidate {
     origin: row.origin,
     orientationCompletedOn: row.orientationCompletedOn,
     activatablePolicies: row.activatablePolicies,
+    trackingNotes: row.trackingNotes,
     recruiterId: row.recruiterId,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -93,6 +94,8 @@ function toProfile(candidateId: EntityId, row: typeof candidateProfiles.$inferSe
     residenceProvince: row?.residenceProvince ?? null,
     residenceRegion: row?.residenceRegion ?? null,
     residenceCountry: row?.residenceCountry ?? null,
+    experienceSector: row?.experienceSector ?? null,
+    experienceMonths: row?.experienceMonths ?? null,
     protectedCategory: row?.protectedCategory ?? "NOT_SPECIFIED",
     protectedCategoryNotes: row?.protectedCategoryNotes ?? null,
     employmentStatus: row?.employmentStatus ?? "UNKNOWN",
@@ -653,6 +656,7 @@ export class PostgresCandidateRepository implements CandidateRepository {
         origin: input.origin,
         orientationCompletedOn: input.orientationCompletedOn,
         activatablePolicies: [...new Set(input.activatablePolicies)],
+        trackingNotes: input.trackingNotes,
       })
       .where(eq(candidates.id, id));
   }

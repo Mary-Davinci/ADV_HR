@@ -164,6 +164,7 @@ export function EditTrackingButton({ candidate }: { candidate: Candidate }) {
     origin: candidate.origin,
     orientationCompletedOn: toFormValue(candidate.orientationCompletedOn),
     activatablePolicies: candidate.activatablePolicies,
+    trackingNotes: toFormValue(candidate.trackingNotes),
   };
   return (
     <EditSectionButton
@@ -194,6 +195,13 @@ export function EditTrackingButton({ candidate }: { candidate: Candidate }) {
         description="Per i candidati arrivati da Indeed, LinkedIn o inseriti a mano: puoi indicarne più di una."
         options={optionsOf(ACTIVE_POLICY_PROGRAM_LABELS)}
       />
+      <TextareaField<TrackingFormInput>
+        name="trackingNotes"
+        label="Note"
+        description="Ad esempio il motivo per cui il candidato non vuole partecipare ad alcun programma."
+        rows={3}
+        maxLength={1000}
+      />
     </EditSectionButton>
   );
 }
@@ -206,6 +214,8 @@ export function EditProfileButton({ profile, label }: { profile: CandidateProfil
     residenceProvince: toFormValue(profile.residenceProvince),
     residenceRegion: toFormValue(profile.residenceRegion),
     residenceCountry: toFormValue(profile.residenceCountry),
+    experienceSector: toFormValue(profile.experienceSector),
+    experienceMonths: toFormValue(profile.experienceMonths),
     protectedCategory: profile.protectedCategory,
     protectedCategoryNotes: toFormValue(profile.protectedCategoryNotes),
     employmentStatus: profile.employmentStatus,
@@ -248,6 +258,10 @@ export function EditProfileButton({ profile, label }: { profile: CandidateProfil
         rows={2}
         maxLength={1000}
       />
+      <FieldRow>
+        <TextField<ProfileFormInput> name="experienceSector" label="Settore di esperienza" maxLength={100} />
+        <TextField<ProfileFormInput> name="experienceMonths" label="Mesi di esperienza dichiarati" type="number" />
+      </FieldRow>
       <TextField<ProfileFormInput> name="residenceAddress" label="Indirizzo di residenza" maxLength={200} />
       <FieldRow columns={3}>
         <TextField<ProfileFormInput> name="residenceCity" label="Città" maxLength={100} />

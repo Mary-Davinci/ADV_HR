@@ -158,6 +158,13 @@ export function OverviewPanel({
         <DetailSection title="Esperienza e disponibilità" icon={BriefcaseBusiness}>
           <DetailList>
             <DetailField label="Esperienza" className="sm:col-span-2">
+              {profile.experiences.length === 0 &&
+                [
+                  profile.profile.experienceMonths !== null && formatMonths(profile.profile.experienceMonths),
+                  profile.profile.experienceSector,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
               {profile.experiences.length > 0 && (
                 <span className="block space-y-1">
                   <span className="block font-medium">{formatMonths(totalMonths)} complessivi</span>
@@ -273,6 +280,11 @@ export function OverviewPanel({
                 "Non presente"
               )}
             </DetailField>
+            {candidate.trackingNotes && (
+              <DetailField label="Note sul percorso">
+                <span className="whitespace-pre-line">{candidate.trackingNotes}</span>
+              </DetailField>
+            )}
             <DetailField label="Politiche attive sottoscritte">
               {profile.activePolicies.length > 0
                 ? profile.activePolicies

@@ -60,6 +60,8 @@ export const candidates = pgTable(
       .array()
       .notNull()
       .default(sql`'{}'`),
+    /** Note HR sul percorso, ad esempio il motivo per cui non partecipa ad alcun programma. */
+    trackingNotes: text("tracking_notes"),
     /** Recruiter di riferimento assegnato da HR, anche senza candidature; non arriva da ADV CORE. */
     recruiterId: uuid("recruiter_id").references(() => users.id, { onDelete: "set null" }),
     ...timestamps(),
@@ -85,6 +87,9 @@ export const candidateProfiles = pgTable(
     residenceProvince: varchar("residence_province", { length: 2 }),
     residenceRegion: varchar("residence_region", { length: 60 }),
     residenceCountry: varchar("residence_country", { length: 2 }).default("IT"),
+    /** Esperienza dichiarata in ADV CORE, senza azienda e date: distinta dalle esperienze dettagliate. */
+    experienceSector: varchar("experience_sector", { length: 100 }),
+    experienceMonths: integer("experience_months"),
     protectedCategory: protectedCategoryEnum("protected_category").notNull().default("NOT_SPECIFIED"),
     protectedCategoryNotes: text("protected_category_notes"),
     employmentStatus: employmentStatusEnum("employment_status").notNull().default("UNKNOWN"),

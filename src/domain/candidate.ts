@@ -111,6 +111,8 @@ export interface Candidate extends AuditInfo {
    * distinte da quelle già sottoscritte (`ActivePolicyParticipation`).
    */
   activatablePolicies: ActivePolicyProgram[];
+  /** Note HR sul percorso, ad esempio il motivo per cui non partecipa ad alcun programma. */
+  trackingNotes: string | null;
   /** Recruiter di riferimento assegnato da HR; null = deducibile solo dalle candidature. */
   recruiterId: EntityId | null;
 }
@@ -120,6 +122,7 @@ export interface CandidateTrackingInput {
   origin: CandidateOrigin;
   orientationCompletedOn: ISODate | null;
   activatablePolicies: ActivePolicyProgram[];
+  trackingNotes: string | null;
 }
 
 export interface CandidateProfile {
@@ -130,6 +133,8 @@ export interface CandidateProfile {
   residenceProvince: string | null;
   residenceRegion: string | null;
   residenceCountry: string | null;
+  experienceSector: string | null;
+  experienceMonths: number | null;
   protectedCategory: ProtectedCategory;
   protectedCategoryNotes: string | null;
   employmentStatus: EmploymentStatus;

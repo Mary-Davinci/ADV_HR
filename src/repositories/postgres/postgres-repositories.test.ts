@@ -162,10 +162,15 @@ describe("PostgreSQL repositories", () => {
       origin: "INDEED",
       orientationCompletedOn: "2026-09-15",
       activatablePolicies: ["DIL", "GOL", "DIL"],
+      trackingNotes: "Non vuole partecipare a nessun programma",
     });
 
     const saved = await testDb.store.candidates.getById(galli!.id);
-    expect(saved).toMatchObject({ origin: "INDEED", orientationCompletedOn: "2026-09-15" });
+    expect(saved).toMatchObject({
+      origin: "INDEED",
+      orientationCompletedOn: "2026-09-15",
+      trackingNotes: "Non vuole partecipare a nessun programma",
+    });
     expect(saved?.activatablePolicies.sort()).toEqual(["DIL", "GOL"]);
 
     const lastNames = async (query: Parameters<typeof testDb.store.candidates.search>[0]) =>

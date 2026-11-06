@@ -10,7 +10,7 @@ import {
   WORK_MODE_LABELS,
   WORK_TIME_LABELS,
 } from "@/config/labels";
-import { formatDate, formatDateTime } from "@/lib/format";
+import { formatDate, formatDateTime, formatMonths } from "@/lib/format";
 import type { CandidateProfileView } from "@/services/candidate-service";
 
 import { EditIdentityButton, EditPreferencesButton, EditProfileButton } from "../section-forms";
@@ -63,6 +63,10 @@ export function ProfilePanel({ profile, canEdit }: { profile: CandidateProfileVi
               {data.protectedCategoryNotes}
             </DetailField>
           )}
+          <DetailField label="Settore di esperienza">{data.experienceSector}</DetailField>
+          <DetailField label="Esperienza dichiarata">
+            {data.experienceMonths !== null && formatMonths(data.experienceMonths)}
+          </DetailField>
           <DetailField label="Indirizzo" className="sm:col-span-2">
             {data.residenceAddress}
           </DetailField>

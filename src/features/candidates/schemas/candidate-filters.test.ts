@@ -89,15 +89,33 @@ describe("candidate search filters (URL)", () => {
 describe("candidate form schemas", () => {
   it("validates the tracking section (origin, orientation, activatable policies)", () => {
     expect(
-      trackingSchema.parse({ origin: "LINKEDIN", orientationCompletedOn: "", activatablePolicies: ["DIL", "GOL"] }),
-    ).toEqual({ origin: "LINKEDIN", orientationCompletedOn: null, activatablePolicies: ["DIL", "GOL"] });
+      trackingSchema.parse({
+        origin: "LINKEDIN",
+        orientationCompletedOn: "",
+        activatablePolicies: ["DIL", "GOL"],
+        trackingNotes: " Non interessato ",
+      }),
+    ).toEqual({
+      origin: "LINKEDIN",
+      orientationCompletedOn: null,
+      activatablePolicies: ["DIL", "GOL"],
+      trackingNotes: "Non interessato",
+    });
     expect(
-      trackingSchema.safeParse({ origin: "ADV_CORE", orientationCompletedOn: "2999-01-01", activatablePolicies: [] })
-        .success,
+      trackingSchema.safeParse({
+        origin: "ADV_CORE",
+        orientationCompletedOn: "2999-01-01",
+        activatablePolicies: [],
+        trackingNotes: "",
+      }).success,
     ).toBe(false);
     expect(
-      trackingSchema.safeParse({ origin: "ADV_CORE", orientationCompletedOn: "", activatablePolicies: ["BONUS"] })
-        .success,
+      trackingSchema.safeParse({
+        origin: "ADV_CORE",
+        orientationCompletedOn: "",
+        activatablePolicies: ["BONUS"],
+        trackingNotes: "",
+      }).success,
     ).toBe(false);
   });
 

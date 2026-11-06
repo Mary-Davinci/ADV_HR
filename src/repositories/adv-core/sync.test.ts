@@ -4,7 +4,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   activePolicyParticipations,
   advCoreRecords,
+  candidateCertifications,
+  candidateDrivingLicenses,
+  candidateLanguages,
+  candidateProfiles,
   candidates,
+  candidateSkills,
   candidateTags,
   companies,
   documents,
@@ -320,6 +325,48 @@ describe("sincronizzazione ADV Core", () => {
     update({ politiche_attive_tipologia: null, politiche_attive_anno: null });
     await sync();
     expect(await policiesOf(marioId)).toEqual([{ program: "GARANZIA_GIOVANI", year: 2023, notes: "Inserita da HR" }]);
+  });
+
+  it("patente, lingue, informatica ed esperienza: riempiono la scheda senza toccare i dati di HR", async () => {
+    const mario = String((await candidateByLegacy(101))!.id);
+    const luca = String((await candidateByLegacy(102))!.id);
+    await testDb.db.insert(candidateLanguages).values({ candidateId: luca, language: "Tedesco", level: "B2" });
+    const details = {
+      patente: "B",
+      competenze_linguistiche: "ITALIANO MADRELINGUA\r\nINGLESE B1",
+      competenze_informatiche: "Office livello intermedio",
+      certificazioni: "HACCP",
+      settore_esperienza: "MAGAZZINIERE",
+      esperienza_anni: 2,
+      esperienza_mesi: 6,
+    };
+    api.state.candidates[0] = { ...api.state.candidates[0]!, ...details };
+    api.state.candidates[1] = { ...api.state.candidates[1]!, ...details };
+
+    expect((await sync()).status).toBe("SUCCESS");
+
+    const languagesOf = async (id: string) =>
+      (await testDb.db.select().from(candidateLanguages).where(eq(candidateLanguages.candidateId, id))).map(
+        (row) => `${row.language} ${row.level}`,
+      );
+    expect((await languagesOf(mario)).sort()).toEqual(["Inglese B1", "Italiano NATIVE"]);
+    expect(await languagesOf(luca)).toEqual(["Tedesco B2"]);
+    expect(
+      await testDb.db.select().from(candidateDrivingLicenses).where(eq(candidateDrivingLicenses.candidateId, mario)),
+    ).toMatchObject([{ category: "B" }]);
+    expect(await testDb.db.select().from(candidateSkills).where(eq(candidateSkills.candidateId, mario))).toMatchObject([
+      { level: 3, notes: "ADV Core: Office livello intermedio" },
+    ]);
+    expect(
+      await testDb.db.select().from(candidateCertifications).where(eq(candidateCertifications.candidateId, mario)),
+    ).toMatchObject([{ name: "HACCP" }]);
+    expect(
+      await testDb.db.select().from(candidateProfiles).where(eq(candidateProfiles.candidateId, mario)),
+    ).toMatchObject([{ experienceSector: "MAGAZZINIERE", experienceMonths: 30, residencePostalCode: "20100" }]);
+
+    // Una seconda esecuzione non duplica nulla.
+    expect((await sync()).status).toBe("SUCCESS");
+    expect((await languagesOf(mario)).length).toBe(2);
   });
 
   it("elenco incompleto: nessun record viene segnalato come rimosso", async () => {

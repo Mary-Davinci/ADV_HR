@@ -4,9 +4,12 @@ import type { AdvCoreCandidate } from "./client";
 import {
   mapActivePolicyProgram,
   mapCandidate,
+  mapDigitalSkill,
+  mapDrivingLicenses,
   mapEducationLevel,
   mapEmploymentStatus,
   mapGender,
+  mapLanguages,
   mapWorkMode,
   mapWorkTime,
   mergeFields,
@@ -51,6 +54,48 @@ describe("normalizzazione ADV Core", () => {
     expect(cap("00000")).toBeNull();
     expect(cap("2012")).toBeNull();
     expect(cap(null)).toBeNull();
+  });
+
+  it("patente: solo categorie riconosciute", () => {
+    expect(mapDrivingLicenses("B")).toEqual(["B"]);
+    expect(mapDrivingLicenses("B, CE e D1")).toEqual(["B", "CE", "D1"]);
+    expect(mapDrivingLicenses("Nessuna")).toEqual([]);
+    expect(mapDrivingLicenses(null)).toEqual([]);
+  });
+
+  it("lingue: riconosce il livello e non inventa quello mancante", () => {
+    expect(mapLanguages("ITALIANO MADRELINGUA\r\nINGLESE B1")).toEqual([
+      { language: "Italiano", level: "NATIVE", notes: "ADV Core: ITALIANO MADRELINGUA" },
+      { language: "Inglese", level: "B1", notes: "ADV Core: INGLESE B1" },
+    ]);
+    expect(mapLanguages("ITALIANO: LINGUA MADRE")[0]?.level).toBe("NATIVE");
+    expect(mapLanguages("INGLESE BASE")[0]?.level).toBe("A2");
+    expect(mapLanguages("ROMENO C1, RUMENO C2")).toEqual([
+      { language: "Rumeno", level: "C1", notes: "ADV Core: ROMENO C1" },
+    ]);
+    expect(mapLanguages("INGLESE")).toEqual([]);
+    expect(mapLanguages("NESSUNA.")).toEqual([]);
+  });
+
+  it("informatica: conserva il testo e ignora le risposte vuote", () => {
+    expect(mapDigitalSkill("EMAIL, INTERNET, OFFICE LIVELLO INTERMEDIO.")).toEqual({
+      level: 3,
+      notes: "ADV Core: EMAIL, INTERNET, OFFICE LIVELLO INTERMEDIO.",
+    });
+    expect(mapDigitalSkill("NESSUNA COMPETENZA")).toBeNull();
+    expect(mapDigitalSkill("NO")).toBeNull();
+  });
+
+  it("esperienza: anni e mesi insieme, valori fuori scala scartati", () => {
+    const fields = (row: Partial<AdvCoreCandidate>) => mapCandidate(row as AdvCoreCandidate, TODAY).fields;
+    expect(fields({ esperienza_anni: 2, esperienza_mesi: 6, settore_esperienza: "MAGAZZINIERE" })).toMatchObject({
+      "profile.experienceMonths": 30,
+      "profile.experienceSector": "MAGAZZINIERE",
+    });
+    expect(fields({ esperienza_anni: 150, settore_esperienza: "NO" })).toMatchObject({
+      "profile.experienceMonths": null,
+      "profile.experienceSector": null,
+    });
   });
 
   it("regioni in formato leggibile", () => {

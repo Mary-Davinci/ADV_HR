@@ -2,12 +2,22 @@
  * Traduzione dei record ADV CORE nel modello ADV_HR e merge a tre vie.
  * Funzioni pure: nessun accesso a database o rete.
  */
-import type { ActivePolicyProgram, EducationLevel, EmploymentStatus, Gender, WorkMode, WorkTime } from "@/domain";
+import {
+  DRIVING_LICENSE_CATEGORIES,
+  type ActivePolicyProgram,
+  type DrivingLicenseCategory,
+  type EducationLevel,
+  type EmploymentStatus,
+  type Gender,
+  type LanguageLevel,
+  type WorkMode,
+  type WorkTime,
+} from "@/domain";
 
 import type { AdvCoreCandidate, AdvCoreCompany } from "./client";
 
 /** Da incrementare quando cambia il mapping: forza la rielaborazione di tutti i record. */
-export const MAPPING_VERSION = 4;
+export const MAPPING_VERSION = 5;
 
 export type FieldValue = string | number | boolean | null;
 /** Campi piatti "tabella.campo" (es. "candidate.email", "profile.residenceCity"). */
@@ -175,6 +185,71 @@ export interface MappedCandidate {
    * (riconosciuta dal prefisso nelle note): quelle inserite in ADV_HR non si toccano.
    */
   activePolicy: { programType: ActivePolicyProgram; referenceYear: number; notes: string } | null;
+  /** Dettagli del profilo: scritti solo se la relativa sezione è vuota, per non toccare il lavoro di HR. */
+  details: {
+    drivingLicenses: DrivingLicenseCategory[];
+    languages: Array<{ language: string; level: LanguageLevel; notes: string }>;
+    digitalSkill: { level: number | null; notes: string } | null;
+    certification: string | null;
+  };
+}
+
+/** "NO", "NESSUNA.", "N/D": risposte che in ADV CORE significano assenza del dato. */
+function declared(value: string | null): string | null {
+  return value && !/^(no|nessun[ao]?( (competenza|conoscenza|certificazione))?|n\.?\/?[da]\.?|-+)\.?$/i.test(value)
+    ? value
+    : null;
+}
+
+function experienceMonths(row: AdvCoreCandidate): number | null {
+  const years = Number(row.esperienza_anni ?? 0);
+  const months = Number(row.esperienza_mesi ?? 0);
+  const total = years * 12 + months;
+  // Anni fuori scala (es. 150) sono errori di digitazione: meglio nessun dato che uno falso.
+  return Number.isInteger(total) && total > 0 && total <= 720 ? total : null;
+}
+
+export function mapDrivingLicenses(value: string | null): DrivingLicenseCategory[] {
+  const tokens = (value ?? "").toUpperCase().split(/[^A-Z0-9]+/);
+  return DRIVING_LICENSE_CATEGORIES.filter((category) => tokens.includes(category));
+}
+
+const LANGUAGE_NAMES =
+  /\b(italiano|inglese|francese|spagnolo|tedesco|portoghese|arabo|russo|rumeno|romeno|albanese|ucraino|cinese|polacco|bengalese|urdu|greco|turco|hindi|serbo|croato|bulgaro)\b/gi;
+
+function languageLevel(text: string): LanguageLevel | null {
+  const cefr = /\b(A1|A2|B1|B2|C1|C2)\b/i.exec(text)?.[1]?.toUpperCase();
+  if (cefr) return cefr as LanguageLevel;
+  if (/madre ?lingua|lingua madre/i.test(text)) return "NATIVE";
+  if (/\b(avanzato|ottimo|fluente)\b/i.test(text)) return "C1";
+  if (/\b(intermedio|discreto|buono)\b/i.test(text)) return "B1";
+  if (/\b(base|elementare|scolastico)\b/i.test(text)) return "A2";
+  return null;
+}
+
+/** Testo libero → lingue con livello; senza livello riconoscibile la lingua non viene inventata. */
+export function mapLanguages(value: string | null): MappedCandidate["details"]["languages"] {
+  const languages = new Map<string, MappedCandidate["details"]["languages"][number]>();
+  for (const segment of (value ?? "").split(/[\r\n;,]+|\.(?=\s|$)/)) {
+    const level = languageLevel(segment);
+    if (!level) continue;
+    for (const [name] of segment.matchAll(LANGUAGE_NAMES)) {
+      const lower = name.toLowerCase() === "romeno" ? "rumeno" : name.toLowerCase();
+      const language = lower.charAt(0).toUpperCase() + lower.slice(1);
+      if (!languages.has(language)) {
+        languages.set(language, { language, level, notes: `ADV Core: ${segment.trim().slice(0, 200)}` });
+      }
+    }
+  }
+  return [...languages.values()];
+}
+
+export function mapDigitalSkill(value: string | null): MappedCandidate["details"]["digitalSkill"] {
+  const notes = cleanLongText(value);
+  if (!notes || !declared(cleanText(notes, 100))) return null;
+  const word = /\b(base|intermedio|avanzato)\b/i.exec(notes)?.[1]?.toLowerCase();
+  const level = word === "avanzato" ? 4 : word === "intermedio" ? 3 : word === "base" ? 2 : null;
+  return { level, notes: `ADV Core: ${notes}`.slice(0, 1000) };
 }
 
 /** CAP italiano di 5 cifre; valori di riempimento come "00000" sono scartati. */
@@ -197,6 +272,8 @@ export function mapCandidate(row: AdvCoreCandidate, today: Date): MappedCandidat
     "profile.residenceCity": cleanText(row.comune, 100),
     "profile.residenceProvince": cleanText(row.provincia_sigla, 2)?.toUpperCase() ?? null,
     "profile.residenceRegion": titleCase(cleanText(row.regione, 60)),
+    "profile.experienceSector": declared(cleanText(row.settore_esperienza, 100)),
+    "profile.experienceMonths": experienceMonths(row),
     "profile.employmentStatus": mapEmploymentStatus(row.stato_occupazionale),
     "profile.professionalSummary": cleanLongText(row.profilo_professionale),
     "preferences.desiredWorkTime": mapWorkTime(row.tipologia_contrattuale),
@@ -223,6 +300,12 @@ export function mapCandidate(row: AdvCoreCandidate, today: Date): MappedCandidat
     fields,
     education: qualification && level ? { qualification, level } : null,
     activePolicy: mapActivePolicy(row, today),
+    details: {
+      drivingLicenses: mapDrivingLicenses(row.patente),
+      languages: mapLanguages(row.competenze_linguistiche),
+      digitalSkill: mapDigitalSkill(row.competenze_informatiche),
+      certification: declared(cleanText(row.certificazioni, 200)),
+    },
   };
 }
 

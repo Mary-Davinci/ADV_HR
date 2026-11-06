@@ -9,7 +9,8 @@
  */
 import { createHash, randomUUID } from "node:crypto";
 
-import { and, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, or, sql, type SQL } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import {
   activePolicyParticipations,
@@ -17,18 +18,24 @@ import {
   advCoreRecords,
   advCoreSyncRuns,
   auditLogs,
+  candidateCertifications,
+  candidateDrivingLicenses,
   candidateEducation,
+  candidateLanguages,
   candidatePreferences,
   candidateProfiles,
   candidates,
+  candidateSkills,
   candidateTags,
   companies,
   documents,
   legacyMappings,
+  skills,
   tags,
 } from "@/db/schema";
 import {
   ALLOWED_DOCUMENT_MIME_TYPES,
+  normalizeSkillName,
   type AdvCoreSyncStatus,
   type AdvCoreSyncTrigger,
   type LegacyEntityType,
@@ -115,6 +122,8 @@ function isoDay(value: string | null): string | null {
   const day = value?.slice(0, 10) ?? "";
   return /^\d{4}-\d{2}-\d{2}$/.test(day) && day >= "2000-01-01" ? day : null;
 }
+
+const DIGITAL_SKILL_NAME = "Competenze informatiche";
 
 function hashPayload(payload: unknown): string {
   return createHash("sha256")
@@ -406,6 +415,41 @@ export async function runAdvCoreSync(options: SyncOptions): Promise<SyncSummary>
    * La politica attiva di ADV CORE è una riga riconoscibile dal prefisso nelle note:
    * si sostituisce a ogni rielaborazione, le partecipazioni inserite in ADV_HR restano.
    */
+  /** Patente, lingue, informatica e certificazioni: solo nelle sezioni ancora vuote, mai sopra ai dati di HR. */
+  async function fillEmptyDetails(tx: Database, candidateId: string, details: MappedCandidate["details"]) {
+    const isEmpty = async (table: PgTable, ofCandidate: SQL) => (await tx.$count(table, ofCandidate)) === 0;
+
+    if (
+      details.drivingLicenses.length &&
+      (await isEmpty(candidateDrivingLicenses, eq(candidateDrivingLicenses.candidateId, candidateId)))
+    ) {
+      await tx
+        .insert(candidateDrivingLicenses)
+        .values(details.drivingLicenses.map((category) => ({ candidateId, category })));
+    }
+    if (
+      details.languages.length &&
+      (await isEmpty(candidateLanguages, eq(candidateLanguages.candidateId, candidateId)))
+    ) {
+      await tx.insert(candidateLanguages).values(details.languages.map((language) => ({ candidateId, ...language })));
+    }
+    if (
+      details.certification &&
+      (await isEmpty(candidateCertifications, eq(candidateCertifications.candidateId, candidateId)))
+    ) {
+      await tx.insert(candidateCertifications).values({ candidateId, name: details.certification, notes: "ADV Core" });
+    }
+    if (details.digitalSkill && (await isEmpty(candidateSkills, eq(candidateSkills.candidateId, candidateId)))) {
+      const normalizedName = normalizeSkillName(DIGITAL_SKILL_NAME);
+      await tx
+        .insert(skills)
+        .values({ name: DIGITAL_SKILL_NAME, category: "DIGITAL", normalizedName })
+        .onConflictDoNothing({ target: skills.normalizedName });
+      const [skill] = await tx.select({ id: skills.id }).from(skills).where(eq(skills.normalizedName, normalizedName));
+      await tx.insert(candidateSkills).values({ candidateId, skillId: skill!.id, ...details.digitalSkill });
+    }
+  }
+
   async function syncActivePolicy(tx: Database, candidateId: string, policy: MappedCandidate["activePolicy"]) {
     await tx
       .delete(activePolicyParticipations)
@@ -511,6 +555,7 @@ export async function runAdvCoreSync(options: SyncOptions): Promise<SyncSummary>
       }
 
       await syncActivePolicy(tx, candidateId, mapped.activePolicy);
+      await fillEmptyDetails(tx, candidateId, mapped.details);
 
       const allFlags = { ...((record?.flags as Record<string, unknown>) ?? {}), ...flags };
       const hasConflicts = Object.keys(conflicts).length > 0;

@@ -59,6 +59,7 @@ export const trackingSchema = z.object({
     "Data non valida (non può essere futura)",
   ),
   activatablePolicies: z.array(z.enum(ACTIVE_POLICY_PROGRAMS)).max(ACTIVE_POLICY_PROGRAMS.length),
+  trackingNotes: optionalText(1000),
 });
 
 export const recruiterSchema = z.object({ recruiterId: optionalUuid });
@@ -77,6 +78,8 @@ export const profileSchema = z.object({
     .transform((value) => value || null),
   protectedCategory: z.enum(PROTECTED_CATEGORIES),
   protectedCategoryNotes: optionalText(1000),
+  experienceSector: optionalText(100),
+  experienceMonths: optionalInt(0, 720),
   employmentStatus: z.enum(EMPLOYMENT_STATUSES),
   professionalSummary: optionalText(4000),
 });
