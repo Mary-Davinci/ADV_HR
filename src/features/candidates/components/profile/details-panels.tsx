@@ -66,9 +66,9 @@ export function ProfilePanel({ profile, canEdit }: { profile: CandidateProfileVi
           <DetailField label="Indirizzo" className="sm:col-span-2">
             {data.residenceAddress}
           </DetailField>
-          <DetailField label="Città">
-            {[data.residenceCity, data.residenceProvince && `(${data.residenceProvince})`].filter(Boolean).join(" ")}
-          </DetailField>
+          <DetailField label="Città">{data.residenceCity}</DetailField>
+          <DetailField label="CAP">{data.residencePostalCode}</DetailField>
+          <DetailField label="Provincia">{data.residenceProvince}</DetailField>
           <DetailField label="Regione">{data.residenceRegion}</DetailField>
           <DetailField label="Ultima revisione">
             {data.lastReviewedAt && formatDateTime(data.lastReviewedAt)}

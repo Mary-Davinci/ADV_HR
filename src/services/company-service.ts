@@ -112,14 +112,18 @@ export function createSelectionService(context: ServiceContext) {
       assertCan(actor, "selection.read");
       const selection = await store.selections.getById(id);
       if (!selection) return null;
-      const [jobDescription, applications, documents, timeline, stages, interviews] = await Promise.all([
-        store.jobDescriptions.getBySelection(id),
-        store.applications.list({ selectionId: id }),
-        store.documents.list({ selectionId: id }),
-        store.activities.list({ selectionId: id, limit: 50 }),
-        store.stages.list(),
-        store.interviews.list({ selectionId: id, statuses: ["SCHEDULED"], from: nowOf(context) }),
-      ]);
+      const now = nowOf(context);
+      const [jobDescription, applications, documents, timeline, stages, interviews, pastInterviews] = await Promise.all(
+        [
+          store.jobDescriptions.getBySelection(id),
+          store.applications.list({ selectionId: id }),
+          store.documents.list({ selectionId: id }),
+          store.activities.list({ selectionId: id, limit: 50 }),
+          store.stages.list(),
+          store.interviews.list({ selectionId: id, statuses: ["SCHEDULED"], from: now }),
+          store.interviews.list({ selectionId: id, concludedBy: now, order: "desc" }),
+        ],
+      );
       return {
         ...selection,
         jobDescription,
@@ -128,6 +132,7 @@ export function createSelectionService(context: ServiceContext) {
         timeline,
         stages,
         upcomingInterviews: interviews.items,
+        pastInterviews: pastInterviews.items,
       };
     },
 

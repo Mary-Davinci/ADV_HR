@@ -42,7 +42,10 @@ export interface CandidateProfileView extends CandidateAggregate {
   /** Derivato dalle activity di contatto: mai inserito manualmente. */
   lastContactAt: Date | null;
   /** Recruiter della candidatura aperta più recente. */
+  /** Recruiter assegnato al candidato oppure, in mancanza, quello di candidature e colloqui. */
   primaryRecruiter: { id: EntityId; displayName: string } | null;
+  /** Ultimo colloquio segnato come svolto: chi l'ha condotto e quando. */
+  lastCompletedInterview: InterviewView | null;
   /** Prossimo colloquio; se non ce ne sono, l'ultimo ancora "programmato" ma già passato (da aggiornare). */
   nextInterview: InterviewView | null;
   nextInterviewOverdue: boolean;
@@ -200,6 +203,13 @@ export function createCandidateService(context: ServiceContext) {
       const openApplication = applications
         .filter((view) => !view.stage.isTerminal && view.application.closedAt === null)
         .sort((a, b) => b.application.updatedAt.getTime() - a.application.updatedAt.getTime())[0];
+      const lastCompletedInterview =
+        interviews.items
+          .filter((view) => view.interview.status === "COMPLETED")
+          .sort((a, b) => b.interview.scheduledAt.getTime() - a.interview.scheduledAt.getTime())[0] ?? null;
+      const assigned = aggregate.candidate.recruiterId
+        ? await store.users.getById(aggregate.candidate.recruiterId)
+        : null;
 
       return {
         ...aggregate,
@@ -212,7 +222,13 @@ export function createCandidateService(context: ServiceContext) {
         timeline,
         talentPools,
         lastContactAt,
-        primaryRecruiter: openApplication?.recruiter ?? applications[0]?.recruiter ?? null,
+        primaryRecruiter:
+          (assigned && { id: assigned.id, displayName: assigned.displayName }) ??
+          openApplication?.recruiter ??
+          applications[0]?.recruiter ??
+          lastCompletedInterview?.recruiter ??
+          null,
+        lastCompletedInterview,
         nextInterview: upcoming[0] ?? overdue ?? null,
         nextInterviewOverdue: !upcoming[0] && Boolean(overdue),
       };
@@ -269,6 +285,15 @@ export function createCandidateService(context: ServiceContext) {
       await store.transaction(async (repos) => {
         await repos.candidates.updateTracking(id, input);
         await afterProfileChange(repos, id, "tracking", changedFields(before, input));
+      });
+    },
+
+    async assignRecruiter(id: EntityId, recruiterId: EntityId | null): Promise<void> {
+      assertCan(actor, "candidate.edit");
+      await requireCandidate(id);
+      await store.transaction(async (repos) => {
+        await repos.candidates.assignRecruiter(id, recruiterId);
+        await afterProfileChange(repos, id, "recruiter", ["recruiterId"]);
       });
     },
 

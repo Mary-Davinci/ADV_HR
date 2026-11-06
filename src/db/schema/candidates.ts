@@ -16,6 +16,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { createdAt, id, timestamps } from "./_shared";
+import { users } from "./identity";
 import {
   activePolicyProgramEnum,
   activePolicyStatusEnum,
@@ -59,6 +60,8 @@ export const candidates = pgTable(
       .array()
       .notNull()
       .default(sql`'{}'`),
+    /** Recruiter di riferimento assegnato da HR, anche senza candidature; non arriva da ADV CORE. */
+    recruiterId: uuid("recruiter_id").references(() => users.id, { onDelete: "set null" }),
     ...timestamps(),
   },
   (t) => [
@@ -77,6 +80,7 @@ export const candidateProfiles = pgTable(
       .primaryKey()
       .references(() => candidates.id, { onDelete: "cascade" }),
     residenceAddress: varchar("residence_address", { length: 200 }),
+    residencePostalCode: varchar("residence_postal_code", { length: 5 }),
     residenceCity: varchar("residence_city", { length: 100 }),
     residenceProvince: varchar("residence_province", { length: 2 }),
     residenceRegion: varchar("residence_region", { length: 60 }),

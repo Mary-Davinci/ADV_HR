@@ -111,6 +111,8 @@ export interface Candidate extends AuditInfo {
    * distinte da quelle già sottoscritte (`ActivePolicyParticipation`).
    */
   activatablePolicies: ActivePolicyProgram[];
+  /** Recruiter di riferimento assegnato da HR; null = deducibile solo dalle candidature. */
+  recruiterId: EntityId | null;
 }
 
 /** Dati di percorso modificabili da HR, separati dall'anagrafica. */
@@ -123,6 +125,7 @@ export interface CandidateTrackingInput {
 export interface CandidateProfile {
   candidateId: EntityId;
   residenceAddress: string | null;
+  residencePostalCode: string | null;
   residenceCity: string | null;
   residenceProvince: string | null;
   residenceRegion: string | null;

@@ -7,7 +7,7 @@ import type { ActivePolicyProgram, EducationLevel, EmploymentStatus, Gender, Wor
 import type { AdvCoreCandidate, AdvCoreCompany } from "./client";
 
 /** Da incrementare quando cambia il mapping: forza la rielaborazione di tutti i record. */
-export const MAPPING_VERSION = 3;
+export const MAPPING_VERSION = 4;
 
 export type FieldValue = string | number | boolean | null;
 /** Campi piatti "tabella.campo" (es. "candidate.email", "profile.residenceCity"). */
@@ -177,6 +177,12 @@ export interface MappedCandidate {
   activePolicy: { programType: ActivePolicyProgram; referenceYear: number; notes: string } | null;
 }
 
+/** CAP italiano di 5 cifre; valori di riempimento come "00000" sono scartati. */
+function normalizePostalCode(value: string | null): string | null {
+  const cap = value?.trim() ?? "";
+  return /^\d{5}$/.test(cap) && cap !== "00000" ? cap : null;
+}
+
 export function mapCandidate(row: AdvCoreCandidate, today: Date): MappedCandidate {
   const fields: FieldMap = {
     "candidate.firstName": cleanText(row.nome, 100) ?? "N/D",
@@ -187,6 +193,7 @@ export function mapCandidate(row: AdvCoreCandidate, today: Date): MappedCandidat
     "candidate.birthDate": normalizeDate(row.nato_il, today),
     "candidate.gender": mapGender(row.sesso),
     "profile.residenceAddress": cleanText(row.indirizzo, 200),
+    "profile.residencePostalCode": normalizePostalCode(row.cap),
     "profile.residenceCity": cleanText(row.comune, 100),
     "profile.residenceProvince": cleanText(row.provincia_sigla, 2)?.toUpperCase() ?? null,
     "profile.residenceRegion": titleCase(cleanText(row.regione, 60)),

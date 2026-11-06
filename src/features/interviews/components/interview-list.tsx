@@ -4,7 +4,7 @@ import Link from "next/link";
 import { INTERVIEW_TYPE_LABELS } from "@/config/labels";
 import type { UserRef } from "@/domain";
 import { InterviewStatusBadge } from "@/features/recruiting/components/badges";
-import { formatRelativeDay, formatTime } from "@/lib/format";
+import { formatInterviewDay, formatTime } from "@/lib/format";
 import type { InterviewView } from "@/repositories/types";
 
 import { InterviewEditButton } from "./interview-edit-button";
@@ -16,7 +16,7 @@ function ModeIcon({ view }: { view: InterviewView }) {
 }
 
 /**
- * Elenco colloqui in formato agenda: orario in evidenza, poi candidato,
+ * Elenco colloqui in formato agenda: data e orario sempre visibili, poi candidato,
  * selezione e stato. `showCandidate=false` nella scheda del candidato.
  */
 export function InterviewList({
@@ -39,11 +39,11 @@ export function InterviewList({
       {items.map((view) => (
         <li key={view.interview.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-start gap-4">
-            <div className="w-24 shrink-0">
-              <p className="text-sm font-semibold tabular-nums">{formatTime(view.interview.scheduledAt)}</p>
-              <p className="text-xs text-muted-foreground first-letter:uppercase">
-                {formatRelativeDay(view.interview.scheduledAt)}
+            <div className="w-36 shrink-0">
+              <p className="text-sm font-semibold first-letter:uppercase">
+                {formatInterviewDay(view.interview.scheduledAt)}
               </p>
+              <p className="text-sm font-semibold tabular-nums">ore {formatTime(view.interview.scheduledAt)}</p>
             </div>
             <div className="min-w-0 space-y-0.5">
               {showCandidate && (

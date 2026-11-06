@@ -55,6 +55,14 @@ export function formatRelativeDay(value: DateInput): string {
   return format(date, "EEE d MMM", { locale: it });
 }
 
+/** Giorno del colloquio con l'anno: "Oggi, 6 nov 2026" oppure "ven 6 nov 2026". */
+export function formatInterviewDay(value: DateInput): string {
+  if (!value) return EMPTY_VALUE;
+  const date = toDate(value);
+  if (isToday(date) || isTomorrow(date) || isYesterday(date)) return `${formatRelativeDay(date)}, ${formatDate(date)}`;
+  return format(date, "EEE d MMM yyyy", { locale: it });
+}
+
 export function formatSlot(value: DateInput): string {
   if (!value) return EMPTY_VALUE;
   return `${formatRelativeDay(value)}, ${formatTime(value)}`;

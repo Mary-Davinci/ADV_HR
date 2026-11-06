@@ -99,6 +99,13 @@
       "when": 1793611876938,
       "tag": "0013_document_types_skills_orientation",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1793963286407,
+      "tag": "0014_candidate_postal_code_recruiter",
+      "breakpoints": true
     }
   ]
 }

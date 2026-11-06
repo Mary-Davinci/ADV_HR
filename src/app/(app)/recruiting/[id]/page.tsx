@@ -1,4 +1,4 @@
-import { ArrowLeft, Clock, History, PhoneCall } from "lucide-react";
+import { ArrowLeft, Clock, History, Pencil, PhoneCall } from "lucide-react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
@@ -104,6 +104,7 @@ export default async function CandidatePage({ params, searchParams }: PageProps<
         <OverviewPanel
           profile={profile}
           canEdit={canEdit}
+          recruiters={recruiters}
           recommendations={
             <Suspense fallback={<RecommendedSelectionsSkeleton />}>
               <RecommendedSelections candidateId={id} canAdd={permissions.manage} />
@@ -267,6 +268,12 @@ export default async function CandidatePage({ params, searchParams }: PageProps<
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          {canEdit && (
+            <ButtonLink variant="outline" href={`/recruiting/${id}?tab=profile`}>
+              <Pencil aria-hidden="true" />
+              Modifica dati
+            </ButtonLink>
+          )}
           {canEdit && (
             <LogContactButton
               candidateId={id}

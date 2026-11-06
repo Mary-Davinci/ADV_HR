@@ -1,4 +1,4 @@
-import { aliasedTable, and, asc, desc, eq, gte, inArray, lt, lte, or, sql, type SQL } from "drizzle-orm";
+import { aliasedTable, and, asc, desc, eq, gte, inArray, lt, lte, ne, or, sql, type SQL } from "drizzle-orm";
 
 import {
   activities,
@@ -61,6 +61,10 @@ function interviewConditions(query: Omit<InterviewQuery, "limit" | "offset" | "o
   const conditions: SQL[] = [];
   if (query.from) conditions.push(gte(interviews.scheduledAt, query.from));
   if (query.to) conditions.push(lte(interviews.scheduledAt, query.to));
+  if (query.concludedBy) {
+    const concluded = or(lte(interviews.scheduledAt, query.concludedBy), ne(interviews.status, "SCHEDULED"));
+    if (concluded) conditions.push(concluded);
+  }
   if (query.statuses?.length) conditions.push(inArray(interviews.status, query.statuses));
   if (query.recruiterId) conditions.push(eq(interviews.recruiterId, query.recruiterId));
   if (query.companyId) conditions.push(eq(recruitmentSelections.companyId, query.companyId));

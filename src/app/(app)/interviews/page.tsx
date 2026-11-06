@@ -64,7 +64,7 @@ function buildQuery(view: View, filters: z.infer<typeof filtersSchema>, now: Dat
         order: "asc",
       };
     case "past":
-      return { ...query, to: now, order: "desc" };
+      return { ...query, concludedBy: now, order: "desc" };
   }
 }
 

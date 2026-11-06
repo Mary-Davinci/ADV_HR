@@ -10,6 +10,7 @@ import { createTestDatabase, type TestDatabase } from "@/test/test-database";
 import { createApplicationService } from "./application-service";
 import { createAuthService } from "./auth-service";
 import { createCandidateService } from "./candidate-service";
+import { createSelectionService } from "./company-service";
 import { createDashboardService } from "./dashboard-service";
 import { createDocumentService, sanitizeFilename } from "./document-service";
 import { createInterviewService } from "./interview-service";
@@ -224,6 +225,29 @@ describe("services", () => {
       expect(audit).toMatchObject({ action: "CREATE", changes: { section: "languages" } });
     });
 
+    it("assigns a recruiter to a candidate without applications and shows who ran the last interview", async () => {
+      const service = createCandidateService(ctx(actors.recruiter));
+      const { id } = await service.create({
+        firstName: "Senza",
+        lastName: "Candidature",
+        fiscalCode: null,
+        email: null,
+        phone: null,
+        birthDate: null,
+        gender: "NOT_SPECIFIED",
+      });
+      expect((await service.getProfile(id))?.primaryRecruiter).toBeNull();
+      await service.assignRecruiter(id, actors.recruiter.id);
+      expect((await service.getProfile(id))?.primaryRecruiter?.id).toBe(actors.recruiter.id);
+      const [listed] = (await service.search({ text: "Candidature", recruiterId: actors.recruiter.id })).items;
+      expect(listed).toMatchObject({ id, recruiter: { id: actors.recruiter.id } });
+      await service.assignRecruiter(id, null);
+      expect((await service.getProfile(id))?.primaryRecruiter).toBeNull();
+      await expect(createCandidateService(ctx(actors.viewer)).assignRecruiter(id, null)).rejects.toThrow(
+        ForbiddenError,
+      );
+    });
+
     it("rejects duplicate fiscal codes", async () => {
       await expect(
         createCandidateService(ctx(actors.recruiter)).create({
@@ -251,6 +275,36 @@ describe("services", () => {
         await testDb.store.activities.list({ entity: { type: "INTERVIEW", id: interview!.interview.id } })
       ).map((activity) => activity.action);
       expect(actions).toEqual(expect.arrayContaining(["INTERVIEW_COMPLETED", "INTERVIEW"]));
+    });
+
+    it("moves finished interviews among the concluded ones, even if marked before their time", async () => {
+      const view = await applicationOf("Cattaneo");
+      const service = createInterviewService(ctx(actors.recruiter));
+      const input = {
+        scheduledAt: new Date(NOW.getTime() + 2 * 86_400_000),
+        durationMinutes: 30,
+        type: "HR" as const,
+        status: "SCHEDULED" as const,
+        recruiterId: actors.recruiter.id,
+        location: "Milano",
+        meetingUrl: null,
+        notes: null,
+      };
+      const { id } = await service.schedule(view.application.id, input);
+      const concluded = async () =>
+        (await service.list({ applicationId: view.application.id, concludedBy: NOW })).items.map(
+          (item) => item.interview.id,
+        );
+      expect(await concluded()).not.toContain(id);
+
+      await service.update(id, { ...input, status: "COMPLETED" });
+      expect(await concluded()).toContain(id);
+      const profile = await createCandidateService(ctx(actors.recruiter)).getProfile(view.candidate.id);
+      expect(profile?.lastCompletedInterview?.recruiter?.id).toBe(actors.recruiter.id);
+
+      const selection = await createSelectionService(ctx(actors.recruiter)).getDetail(view.selection.id);
+      expect(selection?.pastInterviews.map((item) => item.interview.id)).toContain(id);
+      expect(selection?.upcomingInterviews.map((item) => item.interview.id)).not.toContain(id);
     });
 
     it("refuses to schedule interviews in the past", async () => {

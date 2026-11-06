@@ -23,6 +23,11 @@ function Stage({ item }: { item: CandidateListItem }) {
   );
 }
 
+/** "20121 Milano (MI)": CAP, comune e provincia, ciascuno solo se presente. */
+function residenceOf({ postalCode, city, province }: CandidateListItem) {
+  return [postalCode, city, province && `(${province})`].filter(Boolean).join(" ");
+}
+
 function Muted({ children }: { children: React.ReactNode }) {
   return <span className="text-muted-foreground">{children}</span>;
 }
@@ -40,8 +45,8 @@ function CandidateCard({ item }: { item: CandidateListItem }) {
             {item.firstName} {item.lastName}
           </Link>
           <p className="truncate text-sm text-muted-foreground">
-            {item.latestApplication?.recruiter?.displayName ?? "Nessun recruiter"}
-            {item.city && ` · ${item.city}`}
+            {item.recruiter?.displayName ?? "Nessun recruiter"}
+            {residenceOf(item) && ` · ${residenceOf(item)}`}
           </p>
         </div>
         {item.latestApplication && (
@@ -106,12 +111,7 @@ export function CandidateTable({ items }: { items: CandidateListItem[] }) {
                       >
                         {item.firstName} {item.lastName}
                       </Link>
-                      {item.city && (
-                        <p className="text-xs text-muted-foreground">
-                          {item.city}
-                          {item.province && ` (${item.province})`}
-                        </p>
-                      )}
+                      {residenceOf(item) && <p className="text-xs text-muted-foreground">{residenceOf(item)}</p>}
                     </div>
                   </div>
                 </TableCell>
@@ -122,7 +122,7 @@ export function CandidateTable({ items }: { items: CandidateListItem[] }) {
                   {item.nextInterviewAt ? formatSlot(item.nextInterviewAt) : <Muted>{EMPTY_VALUE}</Muted>}
                 </TableCell>
                 <TableCell className="hidden lg:table-cell">
-                  {item.latestApplication?.recruiter?.displayName ?? <Muted>Non assegnato</Muted>}
+                  {item.recruiter?.displayName ?? <Muted>Non assegnato</Muted>}
                 </TableCell>
                 <TableCell>{labelOf(AVAILABILITY_LABELS, item.availability, "Non indicata")}</TableCell>
                 <TableCell className="hidden text-muted-foreground xl:table-cell">

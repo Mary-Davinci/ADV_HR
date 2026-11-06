@@ -75,6 +75,7 @@ export default async function SelectionPage({ params, searchParams }: Params) {
     timeline,
     stages,
     upcomingInterviews,
+    pastInterviews,
   } = detail;
   const permissions = {
     manage: can(user, "application.manage"),
@@ -184,15 +185,33 @@ export default async function SelectionPage({ params, searchParams }: Params) {
           },
           {
             value: "interviews",
-            label: "Colloqui in programma",
-            count: upcomingInterviews.length,
+            label: "Colloqui",
+            count: upcomingInterviews.length + pastInterviews.length,
             content: (
-              <InterviewList
-                items={upcomingInterviews}
-                recruiters={recruiters}
-                canManage={permissions.interview}
-                emptyText="Nessun colloquio in programma."
-              />
+              <div className="space-y-6">
+                <section aria-labelledby="interviews-upcoming" className="space-y-2">
+                  <h2 id="interviews-upcoming" className="text-sm font-medium">
+                    In programma
+                  </h2>
+                  <InterviewList
+                    items={upcomingInterviews}
+                    recruiters={recruiters}
+                    canManage={permissions.interview}
+                    emptyText="Nessun colloquio in programma."
+                  />
+                </section>
+                <section aria-labelledby="interviews-past" className="space-y-2">
+                  <h2 id="interviews-past" className="text-sm font-medium">
+                    Svolti e passati
+                  </h2>
+                  <InterviewList
+                    items={pastInterviews}
+                    recruiters={recruiters}
+                    canManage={permissions.interview}
+                    emptyText="Nessun colloquio svolto."
+                  />
+                </section>
+              </div>
             ),
           },
           {

@@ -15,6 +15,7 @@ import {
   identitySchema,
   preferencesSchema,
   profileSchema,
+  recruiterSchema,
   skillSchema,
   trackingSchema,
 } from "../schemas/profile-schemas";
@@ -50,6 +51,14 @@ export async function updateTrackingAction(input: unknown) {
     input,
     { schema: withCandidate(trackingSchema), revalidate: ({ candidateId }) => candidatePaths(candidateId) },
     ({ candidateId, values }, services) => services.candidates.updateTracking(candidateId, values),
+  );
+}
+
+export async function assignRecruiterAction(input: unknown) {
+  return runAction(
+    input,
+    { schema: withCandidate(recruiterSchema), revalidate: ({ candidateId }) => candidatePaths(candidateId) },
+    ({ candidateId, values }, services) => services.candidates.assignRecruiter(candidateId, values.recruiterId),
   );
 }
 

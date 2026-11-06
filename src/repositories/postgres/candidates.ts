@@ -78,6 +78,7 @@ function toCandidate(row: CandidateRow): Candidate {
     origin: row.origin,
     orientationCompletedOn: row.orientationCompletedOn,
     activatablePolicies: row.activatablePolicies,
+    recruiterId: row.recruiterId,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -87,6 +88,7 @@ function toProfile(candidateId: EntityId, row: typeof candidateProfiles.$inferSe
   return {
     candidateId,
     residenceAddress: row?.residenceAddress ?? null,
+    residencePostalCode: row?.residencePostalCode ?? null,
     residenceCity: row?.residenceCity ?? null,
     residenceProvince: row?.residenceProvince ?? null,
     residenceRegion: row?.residenceRegion ?? null,
@@ -284,6 +286,7 @@ function buildConditions(query: CandidateSearchQuery): SQL[] {
       containsText(candidates.fiscalCode, term),
       containsText(candidates.email, term),
       containsText(candidateProfiles.residenceCity, term),
+      containsText(candidateProfiles.residencePostalCode, term),
       term.length >= MIN_PROFESSION_TERM_LENGTH ? matchesProfession(term) : undefined,
     );
     if (clause) conditions.push(clause);
@@ -354,9 +357,9 @@ function buildConditions(query: CandidateSearchQuery): SQL[] {
     conditions.push(sql`${latestStageCode} IN (${sqlList(query.stageCodes)})`);
   }
   if (query.recruiterId) {
-    conditions.push(sql`EXISTS (
+    conditions.push(sql`(${candidates.recruiterId} = ${query.recruiterId} OR EXISTS (
       SELECT 1 FROM applications a WHERE a.candidate_id = ${candidates.id} AND a.recruiter_id = ${query.recruiterId}
-    )`);
+    ))`);
   }
   if (query.interviewFrom || query.interviewTo) {
     conditions.push(sql`EXISTS (
@@ -404,6 +407,8 @@ export class PostgresCandidateRepository implements CandidateRepository {
         candidate: candidates,
         city: candidateProfiles.residenceCity,
         province: candidateProfiles.residenceProvince,
+        postalCode: candidateProfiles.residencePostalCode,
+        recruiterName: users.displayName,
         employmentStatus: candidateProfiles.employmentStatus,
         protectedCategory: candidateProfiles.protectedCategory,
         availability: candidatePreferences.availability,
@@ -413,6 +418,7 @@ export class PostgresCandidateRepository implements CandidateRepository {
       .from(candidates)
       .leftJoin(candidateProfiles, eq(candidateProfiles.candidateId, candidates.id))
       .leftJoin(candidatePreferences, eq(candidatePreferences.candidateId, candidates.id))
+      .leftJoin(users, eq(users.id, candidates.recruiterId))
       .where(where)
       .orderBy(...order, asc(candidates.id))
       .limit(limit)
@@ -432,6 +438,11 @@ export class PostgresCandidateRepository implements CandidateRepository {
         origin: row.candidate.origin,
         city: row.city,
         province: row.province,
+        postalCode: row.postalCode,
+        recruiter:
+          row.candidate.recruiterId && row.recruiterName
+            ? { id: row.candidate.recruiterId, displayName: row.recruiterName }
+            : (latest.get(row.candidate.id)?.recruiter ?? null),
         employmentStatus: row.employmentStatus ?? "UNKNOWN",
         protectedCategory: row.protectedCategory ?? "NOT_SPECIFIED",
         availability: row.availability,
@@ -644,6 +655,10 @@ export class PostgresCandidateRepository implements CandidateRepository {
         activatablePolicies: [...new Set(input.activatablePolicies)],
       })
       .where(eq(candidates.id, id));
+  }
+
+  async assignRecruiter(id: EntityId, recruiterId: EntityId | null): Promise<void> {
+    await this.db.update(candidates).set({ recruiterId }).where(eq(candidates.id, id));
   }
 
   async markReviewed(id: EntityId, at: Date): Promise<void> {

@@ -71,6 +71,12 @@ export const optionalFiscalCode = z
   .refine((value) => value === "" || FISCAL_CODE_PATTERN.test(value), "Codice fiscale non valido")
   .transform((value) => value || null);
 
+export const optionalPostalCode = z
+  .string()
+  .trim()
+  .refine((value) => value === "" || /^\d{5}$/.test(value), "CAP di 5 cifre")
+  .transform((value) => value || null);
+
 export const optionalProvince = z
   .string()
   .trim()
@@ -79,6 +85,7 @@ export const optionalProvince = z
   .transform((value) => value || null);
 
 export const uuidSchema = z.uuid("Identificativo non valido");
+export const optionalUuid = z.union([z.literal("").transform(() => null), uuidSchema]);
 
 /** Converte un valore di dominio nel valore stringa atteso dal controllo form. */
 export function toFormValue(value: string | number | boolean | null | undefined): string {

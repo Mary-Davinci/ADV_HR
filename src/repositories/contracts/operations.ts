@@ -30,6 +30,8 @@ import type {
 export interface InterviewQuery extends PageRequest {
   from?: Date;
   to?: Date;
+  /** Colloqui conclusi a questa data: orario passato oppure stato diverso da «Programmato». */
+  concludedBy?: Date;
   statuses?: InterviewStatus[];
   recruiterId?: EntityId;
   companyId?: EntityId;

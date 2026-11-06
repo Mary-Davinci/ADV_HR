@@ -82,6 +82,9 @@ export interface CandidateListItem {
   origin: CandidateOrigin;
   city: string | null;
   province: string | null;
+  postalCode: string | null;
+  /** Recruiter assegnato al candidato oppure, in mancanza, quello dell'ultima candidatura. */
+  recruiter: UserRef | null;
   employmentStatus: EmploymentStatus;
   protectedCategory: ProtectedCategory;
   availability: AvailabilityType | null;
@@ -173,6 +176,7 @@ export interface CandidateRepository {
   upsertPreferences(id: EntityId, input: CandidatePreferencesInput): Promise<CandidatePreferences>;
   /** Origine, orientamento e politiche attivabili. */
   updateTracking(id: EntityId, input: CandidateTrackingInput): Promise<void>;
+  assignRecruiter(id: EntityId, recruiterId: EntityId | null): Promise<void>;
   /** Aggiorna `last_reviewed_at` e `updated_at` del candidato (modifica rilevante). */
   markReviewed(id: EntityId, at: Date): Promise<void>;
 

@@ -18,7 +18,7 @@ import { formatDate, formatDateTime, formatLongDate, formatMonths, formatTime, g
 import type { CandidateProfileView } from "@/services/candidate-service";
 
 import { OriginBadge } from "../origin-badge";
-import { EditTrackingButton } from "../section-forms";
+import { EditIdentityButton, EditProfileButton, EditRecruiterButton, EditTrackingButton } from "../section-forms";
 
 /** Formati che il browser apre in una nuova scheda (gli altri si scaricano). */
 const VIEWABLE = new Set(["application/pdf", "image/jpeg", "image/png"]);
@@ -62,22 +62,19 @@ function DocumentLinks({ documents, type }: { documents: DocumentMetadata[]; typ
 export function OverviewPanel({
   profile,
   canEdit,
+  recruiters,
   recommendations,
 }: {
   profile: CandidateProfileView;
   canEdit: boolean;
+  recruiters: Array<{ id: string; displayName: string }>;
   /** Posizioni consigliate, caricate a parte dalla pagina (Suspense). */
   recommendations?: React.ReactNode;
 }) {
   const { candidate } = profile;
   const next = profile.nextInterview;
+  const lastInterview = profile.lastCompletedInterview;
   const age = getAge(candidate.birthDate);
-  const residence = [
-    profile.profile.residenceCity,
-    profile.profile.residenceProvince && `(${profile.profile.residenceProvince})`,
-  ]
-    .filter(Boolean)
-    .join(" ");
   const totalMonths = getTotalExperienceMonths(profile.experiences);
   const latestFeedbacks = profile.feedbacks.slice(0, 3);
 
@@ -126,7 +123,18 @@ export function OverviewPanel({
           )}
         </DetailSection>
 
-        <DetailSection title="Dati personali" icon={IdCard}>
+        <DetailSection
+          title="Dati personali"
+          icon={IdCard}
+          action={
+            canEdit ? (
+              <span className="flex flex-wrap gap-2">
+                <EditIdentityButton candidate={candidate} label="Anagrafica" />
+                <EditProfileButton profile={profile.profile} label="Residenza" />
+              </span>
+            ) : undefined
+          }
+        >
           <DetailList>
             <DetailField label="Codice fiscale">
               {candidate.fiscalCode && <span className="font-mono tracking-wide">{candidate.fiscalCode}</span>}
@@ -134,7 +142,9 @@ export function OverviewPanel({
             <DetailField label="Data di nascita">
               {candidate.birthDate && `${formatDate(candidate.birthDate)}${age !== null ? ` (${age} anni)` : ""}`}
             </DetailField>
-            <DetailField label="Residenza">{residence}</DetailField>
+            <DetailField label="Comune di residenza">{profile.profile.residenceCity}</DetailField>
+            <DetailField label="CAP">{profile.profile.residencePostalCode}</DetailField>
+            <DetailField label="Provincia">{profile.profile.residenceProvince}</DetailField>
             <DetailField label="Categoria protetta (L. 68/99)">
               {labelOf(PROTECTED_CATEGORY_LABELS, profile.profile.protectedCategory)}
             </DetailField>
@@ -188,9 +198,21 @@ export function OverviewPanel({
 
       <aside className="space-y-6" aria-label="Riepilogo">
         {recommendations}
-        <DetailSection title="Riepilogo" icon={UserRound}>
+        <DetailSection
+          title="Riepilogo"
+          icon={UserRound}
+          action={canEdit ? <EditRecruiterButton candidate={candidate} recruiters={recruiters} /> : undefined}
+        >
           <dl className="grid gap-4">
-            <DetailField label="Recruiter principale">{profile.primaryRecruiter?.displayName}</DetailField>
+            <DetailField label="Recruiter di riferimento">{profile.primaryRecruiter?.displayName}</DetailField>
+            {lastInterview && (
+              <DetailField label="Ultimo colloquio svolto da">
+                {lastInterview.recruiter?.displayName ?? "Recruiter non indicato"}
+                <span className="block text-xs text-muted-foreground">
+                  {formatDateTime(lastInterview.interview.scheduledAt)}
+                </span>
+              </DetailField>
+            )}
             <DetailField label="Candidature attive">
               {String(profile.applications.filter((view) => !view.stage.isTerminal).length)}
             </DetailField>

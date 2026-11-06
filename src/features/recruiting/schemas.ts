@@ -8,9 +8,7 @@ import {
   INTERVIEW_TYPES,
   isEvaluationReasonRequired,
 } from "@/domain";
-import { optionalInt, optionalText, uuidSchema } from "@/lib/zod-helpers";
-
-const optionalUuid = z.union([z.literal("").transform(() => null), uuidSchema]);
+import { optionalInt, optionalText, optionalUuid, uuidSchema } from "@/lib/zod-helpers";
 
 export const createApplicationSchema = z.object({
   candidateId: uuidSchema,

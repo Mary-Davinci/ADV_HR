@@ -117,3 +117,7 @@ I contatori scaduti vengono eliminati in piccoli lotti durante gli accessi succe
 
 La migration `0010_login_rate_limits` viene applicata dal pre-deploy prima di avviare il web.
 Se il database o il limitatore non sono disponibili, il login viene rifiutato.
+
+## Fuso orario
+
+Il gestionale lavora in ora italiana: `src/instrumentation.ts` imposta `TZ=Europe/Rome` all'avvio del server, indipendentemente dal fuso del container (Railway usa UTC). Gli orari dei colloqui sono salvati come istanti assoluti; la migration `0014` ha riallineato quelli inseriti in precedenza, mantenendo l'orario che il gestionale mostrava.

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
+import type { AdvCoreCandidate } from "./client";
 import {
   mapActivePolicyProgram,
+  mapCandidate,
   mapEducationLevel,
   mapEmploymentStatus,
   mapGender,
@@ -40,6 +42,15 @@ describe("normalizzazione ADV Core", () => {
     expect(normalizeDate("2030-01-01", TODAY)).toBeNull();
     expect(normalizeDate("1850-01-01", TODAY)).toBeNull();
     expect(normalizeDate("0000-00-00", TODAY)).toBeNull();
+  });
+
+  it("CAP: 5 cifre, valori di riempimento scartati", () => {
+    const cap = (value: string | null) =>
+      mapCandidate({ cap: value } as AdvCoreCandidate, TODAY).fields["profile.residencePostalCode"];
+    expect(cap(" 20121 ")).toBe("20121");
+    expect(cap("00000")).toBeNull();
+    expect(cap("2012")).toBeNull();
+    expect(cap(null)).toBeNull();
   });
 
   it("regioni in formato leggibile", () => {

@@ -31,14 +31,27 @@ import type { ActionResult } from "@/lib/action-result";
 import { actionResolver } from "@/lib/forms";
 import { toFormValue } from "@/lib/zod-helpers";
 
-import { identitySchema, preferencesSchema, profileSchema, trackingSchema } from "../schemas/profile-schemas";
 import {
+  identitySchema,
+  preferencesSchema,
+  profileSchema,
+  recruiterSchema,
+  trackingSchema,
+} from "../schemas/profile-schemas";
+import {
+  assignRecruiterAction,
   updateIdentityAction,
   updatePreferencesAction,
   updateProfileAction,
   updateTrackingAction,
 } from "../server/actions";
-import type { IdentityFormInput, PreferencesFormInput, ProfileFormInput, TrackingFormInput } from "./form-types";
+import type {
+  IdentityFormInput,
+  PreferencesFormInput,
+  ProfileFormInput,
+  RecruiterFormInput,
+  TrackingFormInput,
+} from "./form-types";
 import { IdentityFields } from "./identity-fields";
 
 interface EditSectionProps<TSchema extends z.ZodType<unknown, FieldValues>> {
@@ -48,6 +61,8 @@ interface EditSectionProps<TSchema extends z.ZodType<unknown, FieldValues>> {
   schema: TSchema;
   initialValues: z.input<TSchema>;
   action: (input: { candidateId: string; values: z.input<TSchema> }) => Promise<ActionResult<void>>;
+  /** Testo del pulsante, se la sezione ne mostra più di uno. */
+  label?: string;
   children: React.ReactNode;
 }
 
@@ -58,6 +73,7 @@ function EditSectionButton<TSchema extends z.ZodType<unknown, FieldValues>>({
   schema,
   initialValues,
   action,
+  label = "Modifica",
   children,
 }: EditSectionProps<TSchema>) {
   const [open, setOpen] = useState(false);
@@ -75,7 +91,7 @@ function EditSectionButton<TSchema extends z.ZodType<unknown, FieldValues>>({
         }}
       >
         <Pencil aria-hidden="true" />
-        Modifica
+        {label}
       </Button>
       <FormDialog
         open={open}
@@ -93,7 +109,7 @@ function EditSectionButton<TSchema extends z.ZodType<unknown, FieldValues>>({
   );
 }
 
-export function EditIdentityButton({ candidate }: { candidate: Candidate }) {
+export function EditIdentityButton({ candidate, label }: { candidate: Candidate; label?: string }) {
   const initialValues: IdentityFormInput = {
     firstName: candidate.firstName,
     lastName: candidate.lastName,
@@ -110,8 +126,35 @@ export function EditIdentityButton({ candidate }: { candidate: Candidate }) {
       schema={identitySchema}
       initialValues={initialValues}
       action={updateIdentityAction}
+      label={label}
     >
       <IdentityFields />
+    </EditSectionButton>
+  );
+}
+
+export function EditRecruiterButton({
+  candidate,
+  recruiters,
+}: {
+  candidate: Candidate;
+  recruiters: Array<{ id: string; displayName: string }>;
+}) {
+  return (
+    <EditSectionButton
+      candidateId={candidate.id}
+      title="Recruiter di riferimento"
+      description="Il recruiter a cui appartiene il candidato, anche se non è ancora in una selezione."
+      schema={recruiterSchema}
+      initialValues={{ recruiterId: toFormValue(candidate.recruiterId) }}
+      action={assignRecruiterAction}
+    >
+      <SelectField<RecruiterFormInput>
+        name="recruiterId"
+        label="Recruiter"
+        emptyLabel="Non assegnato"
+        options={recruiters.map((recruiter) => ({ value: recruiter.id, label: recruiter.displayName }))}
+      />
     </EditSectionButton>
   );
 }
@@ -155,9 +198,10 @@ export function EditTrackingButton({ candidate }: { candidate: Candidate }) {
   );
 }
 
-export function EditProfileButton({ profile }: { profile: CandidateProfile }) {
+export function EditProfileButton({ profile, label }: { profile: CandidateProfile; label?: string }) {
   const initialValues: ProfileFormInput = {
     residenceAddress: toFormValue(profile.residenceAddress),
+    residencePostalCode: toFormValue(profile.residencePostalCode),
     residenceCity: toFormValue(profile.residenceCity),
     residenceProvince: toFormValue(profile.residenceProvince),
     residenceRegion: toFormValue(profile.residenceRegion),
@@ -175,6 +219,7 @@ export function EditProfileButton({ profile }: { profile: CandidateProfile }) {
       schema={profileSchema}
       initialValues={initialValues}
       action={updateProfileAction}
+      label={label}
     >
       <TextareaField<ProfileFormInput>
         name="professionalSummary"
@@ -206,10 +251,13 @@ export function EditProfileButton({ profile }: { profile: CandidateProfile }) {
       <TextField<ProfileFormInput> name="residenceAddress" label="Indirizzo di residenza" maxLength={200} />
       <FieldRow columns={3}>
         <TextField<ProfileFormInput> name="residenceCity" label="Città" maxLength={100} />
+        <TextField<ProfileFormInput> name="residencePostalCode" label="CAP" maxLength={5} />
         <TextField<ProfileFormInput> name="residenceProvince" label="Provincia" maxLength={2} />
-        <TextField<ProfileFormInput> name="residenceRegion" label="Regione" maxLength={60} />
       </FieldRow>
-      <TextField<ProfileFormInput> name="residenceCountry" label="Paese (ISO)" maxLength={2} className="sm:max-w-40" />
+      <FieldRow>
+        <TextField<ProfileFormInput> name="residenceRegion" label="Regione" maxLength={60} />
+        <TextField<ProfileFormInput> name="residenceCountry" label="Paese (ISO)" maxLength={2} />
+      </FieldRow>
     </EditSectionButton>
   );
 }

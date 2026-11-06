@@ -24,8 +24,10 @@ import {
   optionalFiscalCode,
   optionalInt,
   optionalPhone,
+  optionalPostalCode,
   optionalProvince,
   optionalText,
+  optionalUuid,
   requiredDate,
   requiredText,
   triState,
@@ -59,8 +61,11 @@ export const trackingSchema = z.object({
   activatablePolicies: z.array(z.enum(ACTIVE_POLICY_PROGRAMS)).max(ACTIVE_POLICY_PROGRAMS.length),
 });
 
+export const recruiterSchema = z.object({ recruiterId: optionalUuid });
+
 export const profileSchema = z.object({
   residenceAddress: optionalText(200),
+  residencePostalCode: optionalPostalCode,
   residenceCity: optionalText(100),
   residenceProvince: optionalProvince,
   residenceRegion: optionalText(60),
