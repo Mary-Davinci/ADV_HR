@@ -1,4 +1,4 @@
-import { MapPin, Settings2, UserRound } from "lucide-react";
+import { IdCard, Settings2 } from "lucide-react";
 
 import { DetailField, DetailList, DetailSection } from "@/components/common/detail-section";
 import {
@@ -11,84 +11,128 @@ import {
   WORK_MODE_LABELS,
   WORK_TIME_LABELS,
 } from "@/config/labels";
-import { formatDate, formatDateTime, formatMonths } from "@/lib/format";
+import { daysUntil, formatDate, formatDateTime, formatMonths, getAge } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import type { CandidateProfileView } from "@/services/candidate-service";
 
 import { EditIdentityButton, EditPreferencesButton, EditProfileButton } from "../section-forms";
 
 const yesNo = (value: boolean | null) => (value === null ? null : value ? "Sì" : "No");
 
-export function ProfilePanel({ profile, canEdit }: { profile: CandidateProfileView; canEdit: boolean }) {
+export function PersonalDetailsPanel({ profile, canEdit }: { profile: CandidateProfileView; canEdit: boolean }) {
   const { candidate } = profile;
   const data = profile.profile;
+  const age = getAge(candidate.birthDate);
+  const permitDays = daysUntil(candidate.residencePermitExpiresOn);
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
-      <DetailSection
-        title="Anagrafica"
-        icon={UserRound}
-        action={canEdit ? <EditIdentityButton candidate={candidate} /> : undefined}
-      >
-        <DetailList>
-          <DetailField label="Nome">{candidate.firstName}</DetailField>
-          <DetailField label="Cognome">{candidate.lastName}</DetailField>
-          <DetailField label="Codice fiscale">
-            {candidate.fiscalCode && <span className="font-mono">{candidate.fiscalCode}</span>}
-          </DetailField>
-          <DetailField label="Data di nascita">{candidate.birthDate && formatDate(candidate.birthDate)}</DetailField>
-          <DetailField label="Email">{candidate.email}</DetailField>
-          <DetailField label="Telefono">{candidate.phone}</DetailField>
-          <DetailField label="Genere">{labelOf(GENDER_LABELS, candidate.gender)}</DetailField>
-          <DetailField label="Nazionalità">{candidate.nationality}</DetailField>
-          <DetailField label="Permesso di soggiorno">
-            {labelOf(RESIDENCE_PERMIT_STATUS_LABELS, candidate.residencePermitStatus, "")}
-          </DetailField>
-          <DetailField label="Scadenza del permesso">
-            {candidate.residencePermitExpiresOn && formatDate(candidate.residencePermitExpiresOn)}
-          </DetailField>
-          <DetailField label="Motivo o note sul permesso">{candidate.residencePermitNotes}</DetailField>
-          <DetailField label="Inserito il">{formatDateTime(candidate.createdAt)}</DetailField>
-        </DetailList>
-      </DetailSection>
-
-      <DetailSection
-        title="Profilo e residenza"
-        icon={MapPin}
-        action={canEdit ? <EditProfileButton profile={data} /> : undefined}
-      >
-        <DetailList>
-          <DetailField label="Sintesi professionale" className="sm:col-span-2">
-            {data.professionalSummary && (
-              <span className="leading-relaxed whitespace-pre-line">{data.professionalSummary}</span>
-            )}
-          </DetailField>
-          <DetailField label="Stato occupazionale">
-            {labelOf(EMPLOYMENT_STATUS_LABELS, data.employmentStatus)}
-          </DetailField>
-          <DetailField label="Categoria protetta">
-            {labelOf(PROTECTED_CATEGORY_LABELS, data.protectedCategory)}
-          </DetailField>
-          {data.protectedCategoryNotes && (
-            <DetailField label="Note categoria protetta" className="sm:col-span-2">
-              {data.protectedCategoryNotes}
-            </DetailField>
+    <DetailSection
+      title="Dati personali"
+      icon={IdCard}
+      action={
+        canEdit ? (
+          <span className="flex flex-wrap gap-2">
+            <EditIdentityButton candidate={candidate} label="Anagrafica" />
+            <EditProfileButton profile={data} label="Profilo e residenza" />
+          </span>
+        ) : undefined
+      }
+    >
+      <DetailList>
+        <DetailField label="Sintesi professionale" className="sm:col-span-2">
+          {data.professionalSummary && (
+            <span className="leading-relaxed whitespace-pre-line">{data.professionalSummary}</span>
           )}
-          <DetailField label="Settore di esperienza">{data.experienceSector}</DetailField>
-          <DetailField label="Esperienza dichiarata">
-            {data.experienceMonths !== null && formatMonths(data.experienceMonths)}
+        </DetailField>
+        <DetailField label="Nome">{candidate.firstName}</DetailField>
+        <DetailField label="Cognome">{candidate.lastName}</DetailField>
+        <DetailField label="Codice fiscale">
+          {candidate.fiscalCode && <span className="font-mono">{candidate.fiscalCode}</span>}
+        </DetailField>
+        <DetailField label="Data di nascita">
+          {candidate.birthDate && `${formatDate(candidate.birthDate)}${age !== null ? ` (${age} anni)` : ""}`}
+        </DetailField>
+        <DetailField label="Email">
+          {candidate.email && (
+            <a href={`mailto:${candidate.email}`} className="break-all underline-offset-4 hover:underline">
+              {candidate.email}
+            </a>
+          )}
+        </DetailField>
+        <DetailField label="Telefono">
+          {candidate.phone && (
+            <a href={`tel:${candidate.phone.replace(/\s+/g, "")}`} className="underline-offset-4 hover:underline">
+              {candidate.phone}
+            </a>
+          )}
+        </DetailField>
+        <DetailField label="Genere">{labelOf(GENDER_LABELS, candidate.gender)}</DetailField>
+        <DetailField label="Nazionalità">{candidate.nationality}</DetailField>
+        <DetailField label="Permesso di soggiorno">
+          {labelOf(RESIDENCE_PERMIT_STATUS_LABELS, candidate.residencePermitStatus, "")}
+        </DetailField>
+        <DetailField label="Scadenza del permesso">
+          {candidate.residencePermitExpiresOn && (
+            <span
+              className={cn(
+                permitDays !== null && permitDays < 0
+                  ? "font-medium text-destructive"
+                  : permitDays !== null && permitDays <= 60
+                    ? "font-medium text-amber-700 dark:text-amber-400"
+                    : undefined,
+              )}
+            >
+              {permitDays !== null && permitDays < 0 ? "Scaduto il " : "Scade il "}
+              {formatDate(candidate.residencePermitExpiresOn)}
+            </span>
+          )}
+        </DetailField>
+        <DetailField label="Motivo o note sul permesso">{candidate.residencePermitNotes}</DetailField>
+        <DetailField label="Inserito il">{formatDateTime(candidate.createdAt)}</DetailField>
+        <DetailField label="Stato occupazionale">
+          {labelOf(EMPLOYMENT_STATUS_LABELS, data.employmentStatus)}
+        </DetailField>
+        <DetailField label="Categoria protetta">
+          {labelOf(PROTECTED_CATEGORY_LABELS, data.protectedCategory)}
+        </DetailField>
+        {data.protectedCategoryNotes && (
+          <DetailField label="Note categoria protetta" className="sm:col-span-2">
+            {data.protectedCategoryNotes}
           </DetailField>
-          <DetailField label="Indirizzo" className="sm:col-span-2">
-            {data.residenceAddress}
+        )}
+        <DetailField label="Settore di esperienza">{data.experienceSector}</DetailField>
+        <DetailField label="Esperienza dichiarata">
+          {data.experienceMonths !== null && formatMonths(data.experienceMonths)}
+        </DetailField>
+        <DetailField label="Indirizzo" className="sm:col-span-2">
+          {data.residenceAddress}
+        </DetailField>
+        <DetailField label="Città">{data.residenceCity}</DetailField>
+        <DetailField label="CAP">{data.residencePostalCode}</DetailField>
+        <DetailField label="Provincia">{data.residenceProvince}</DetailField>
+        <DetailField label="Regione">{data.residenceRegion}</DetailField>
+        <DetailField label="Paese di residenza">{data.residenceCountry}</DetailField>
+        <DetailField label="Disponibilità">
+          {labelOf(AVAILABILITY_LABELS, profile.preferences.availability, "")}
+        </DetailField>
+        {profile.preferences.availabilityNotes && (
+          <DetailField label="Note disponibilità" className="sm:col-span-2">
+            {profile.preferences.availabilityNotes}
           </DetailField>
-          <DetailField label="Città">{data.residenceCity}</DetailField>
-          <DetailField label="CAP">{data.residencePostalCode}</DetailField>
-          <DetailField label="Provincia">{data.residenceProvince}</DetailField>
-          <DetailField label="Regione">{data.residenceRegion}</DetailField>
-          <DetailField label="Ultima revisione">
-            {data.lastReviewedAt && formatDateTime(data.lastReviewedAt)}
+        )}
+        <DetailField label="Ultima revisione">{data.lastReviewedAt && formatDateTime(data.lastReviewedAt)}</DetailField>
+        {profile.tags.length > 0 && (
+          <DetailField label="Etichette" className="sm:col-span-2">
+            <span className="flex flex-wrap gap-1.5">
+              {profile.tags.map((tag) => (
+                <span key={tag.id} className="rounded-md border bg-muted/50 px-2 py-0.5 text-xs">
+                  {tag.name}
+                </span>
+              ))}
+            </span>
           </DetailField>
-        </DetailList>
-      </DetailSection>
-    </div>
+        )}
+      </DetailList>
+    </DetailSection>
   );
 }
 

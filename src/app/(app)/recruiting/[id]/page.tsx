@@ -1,4 +1,4 @@
-import { ArrowLeft, Clock, History, Pencil, PhoneCall } from "lucide-react";
+import { ArrowLeft, Clock, History, PhoneCall } from "lucide-react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
@@ -11,13 +11,12 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { CollectionEditor } from "@/features/candidates/components/collection-editor";
 import { LogContactButton } from "@/features/candidates/components/log-contact-button";
 import { ApplicationsPanel } from "@/features/candidates/components/profile/applications-panel";
-import { PreferencesPanel, ProfilePanel } from "@/features/candidates/components/profile/details-panels";
+import { PreferencesPanel } from "@/features/candidates/components/profile/details-panels";
 import { OverviewPanel } from "@/features/candidates/components/profile/overview-panel";
 import {
   RecommendedSelections,
   RecommendedSelectionsSkeleton,
 } from "@/features/candidates/components/profile/recommended-selections";
-import { SkillsEditor } from "@/features/candidates/components/skills-editor";
 import { DocumentsPanel } from "@/features/documents/components/documents-panel";
 import { AddToSelectionButton } from "@/features/recruiting/components/add-application-buttons";
 import { StageBadge } from "@/features/recruiting/components/badges";
@@ -63,6 +62,14 @@ export default async function CandidatePage({ params, searchParams }: PageProps<
     interview: can(user, "interview.manage"),
   };
   const latest = profile.applications[0];
+  const activeTab =
+    typeof tab === "string"
+      ? tab === "interviews"
+        ? "applications"
+        : ["profile", "experience", "skills"].includes(tab)
+          ? "overview"
+          : tab
+      : "overview";
 
   const tabs = [
     ...(webSubmissions.length
@@ -99,42 +106,7 @@ export default async function CandidatePage({ params, searchParams }: PageProps<
     {
       value: "overview",
       label: "Panoramica",
-      content: (
-        <OverviewPanel
-          profile={profile}
-          canEdit={canEdit}
-          recruiters={recruiters}
-          recommendations={
-            <Suspense fallback={<RecommendedSelectionsSkeleton />}>
-              <RecommendedSelections candidateId={id} canAdd={permissions.manage} />
-            </Suspense>
-          }
-        />
-      ),
-    },
-    { value: "profile", label: "Profilo", content: <ProfilePanel profile={profile} canEdit={canEdit} /> },
-    {
-      value: "experience",
-      label: "Esperienze",
-      count: profile.experiences.length,
-      content: <CollectionEditor candidateId={id} kind="experiences" items={profile.experiences} canEdit={canEdit} />,
-    },
-    {
-      value: "skills",
-      label: "Competenze",
-      count: profile.skills.length,
-      content: (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div className="lg:col-span-2">
-            <SkillsEditor candidateId={id} skills={profile.skills} canEdit={canEdit} />
-          </div>
-          <CollectionEditor candidateId={id} kind="languages" items={profile.languages} canEdit={canEdit} />
-          <CollectionEditor candidateId={id} kind="drivingLicenses" items={profile.drivingLicenses} canEdit={canEdit} />
-          <div className="lg:col-span-2">
-            <CollectionEditor candidateId={id} kind="certifications" items={profile.certifications} canEdit={canEdit} />
-          </div>
-        </div>
-      ),
+      content: <OverviewPanel profile={profile} canEdit={canEdit} recruiters={recruiters} />,
     },
     {
       value: "education",
@@ -156,7 +128,12 @@ export default async function CandidatePage({ params, searchParams }: PageProps<
       label: "Candidature",
       count: profile.applications.length,
       content: (
-        <ApplicationsPanel profile={profile} stages={stages} recruiters={recruiters} permissions={permissions} />
+        <div className="space-y-6">
+          <ApplicationsPanel profile={profile} stages={stages} recruiters={recruiters} permissions={permissions} />
+          <Suspense fallback={<RecommendedSelectionsSkeleton />}>
+            <RecommendedSelections candidateId={id} canAdd={permissions.manage} />
+          </Suspense>
+        </div>
       ),
     },
     {
@@ -254,12 +231,6 @@ export default async function CandidatePage({ params, searchParams }: PageProps<
         </div>
         <div className="flex flex-wrap gap-2">
           {canEdit && (
-            <ButtonLink variant="outline" href={`/recruiting/${id}?tab=profile`}>
-              <Pencil aria-hidden="true" />
-              Modifica dati
-            </ButtonLink>
-          )}
-          {canEdit && (
             <LogContactButton
               candidateId={id}
               applications={profile.applications
@@ -278,11 +249,7 @@ export default async function CandidatePage({ params, searchParams }: PageProps<
         </div>
       </header>
 
-      <UrlTabs
-        label="Sezioni della scheda candidato"
-        tabs={tabs}
-        defaultValue={typeof tab === "string" ? (tab === "interviews" ? "applications" : tab) : undefined}
-      />
+      <UrlTabs key={activeTab} label="Sezioni della scheda candidato" tabs={tabs} defaultValue={activeTab} />
     </div>
   );
 }

@@ -1,35 +1,21 @@
-import { BriefcaseBusiness, CalendarClock, FileText, IdCard, MessageSquareText, Route, UserRound } from "lucide-react";
+import { CalendarClock, FileText, Route, UserRound } from "lucide-react";
 import Link from "next/link";
 
 import { DetailField, DetailList, DetailSection } from "@/components/common/detail-section";
-import {
-  ACTIVE_POLICY_PROGRAM_LABELS,
-  AVAILABILITY_LABELS,
-  CANDIDATE_ORIGIN_LABELS,
-  DRIVING_LICENSE_LABELS,
-  EMPLOYMENT_STATUS_LABELS,
-  FEEDBACK_TYPE_LABELS,
-  GENDER_LABELS,
-  INTERVIEW_TYPE_LABELS,
-  labelOf,
-  PROTECTED_CATEGORY_LABELS,
-  RESIDENCE_PERMIT_STATUS_LABELS,
-} from "@/config/labels";
-import { getTotalExperienceMonths, type DocumentMetadata, type DocumentType } from "@/domain";
-import { daysUntil, formatDate, formatDateTime, formatLongDate, formatMonths, formatTime, getAge } from "@/lib/format";
-import { cn } from "@/lib/utils";
+import { ACTIVE_POLICY_PROGRAM_LABELS, CANDIDATE_ORIGIN_LABELS, INTERVIEW_TYPE_LABELS } from "@/config/labels";
+import type { DocumentMetadata, DocumentType } from "@/domain";
+import { formatDate, formatLongDate, formatTime } from "@/lib/format";
 import type { CandidateProfileView } from "@/services/candidate-service";
 
+import { CollectionEditor } from "../collection-editor";
 import { OriginBadge } from "../origin-badge";
-import { EditIdentityButton, EditProfileButton, EditRecruiterButton, EditTrackingButton } from "../section-forms";
+import { EditRecruiterButton, EditTrackingButton } from "../section-forms";
+import { SkillsEditor } from "../skills-editor";
+import { PersonalDetailsPanel } from "./details-panels";
 
-/** Formati che il browser apre in una nuova scheda (gli altri si scaricano). */
 const VIEWABLE = new Set(["application/pdf", "image/jpeg", "image/png"]);
 
-/**
- * Collegamenti ai documenti di un tipo (es. bilancio delle competenze), dal più recente.
- * Senza data: per gli allegati di ADV Core sarebbe quella di importazione, non del documento.
- */
+/** Per i documenti importati la data di caricamento non coincide con quella del documento. */
 function DocumentLinks({ documents, type }: { documents: DocumentMetadata[]; type: DocumentType }) {
   const matching = documents
     .filter((document) => document.type === type)
@@ -57,57 +43,36 @@ function DocumentLinks({ documents, type }: { documents: DocumentMetadata[]; typ
   );
 }
 
-/**
- * Panoramica. Ordine informativo concordato con HR:
- * nome → data/ora colloquio → CF → nascita → residenza → L.68/99 →
- * esperienza → disponibilità → feedback recruiter. Sezioni verticali.
- */
+/** Profilo completo e modificabile in Panoramica; riepilogo operativo nella colonna laterale. */
 export function OverviewPanel({
   profile,
   canEdit,
   recruiters,
-  recommendations,
 }: {
   profile: CandidateProfileView;
   canEdit: boolean;
   recruiters: Array<{ id: string; displayName: string }>;
-  /** Posizioni consigliate, caricate a parte dalla pagina (Suspense). */
-  recommendations?: React.ReactNode;
 }) {
   const { candidate } = profile;
-  const next = profile.nextInterview;
-  const lastInterview = profile.lastCompletedInterview;
-  const licenses = profile.drivingLicenses
-    .filter((license) => license.valid)
-    .map((license) => DRIVING_LICENSE_LABELS[license.category]);
-  const age = getAge(candidate.birthDate);
-  const permitDays = daysUntil(candidate.residencePermitExpiresOn);
-  const totalMonths = getTotalExperienceMonths(profile.experiences);
-  const latestFeedbacks = profile.feedbacks.slice(0, 3);
+  const next =
+    profile.nextInterview?.interview.status === "SCHEDULED" && !profile.nextInterviewOverdue
+      ? profile.nextInterview
+      : null;
+  const hasEvaluationDocuments = profile.documents.some((document) => document.type === "INTERVIEW_EVALUATION");
+  const hasCertificates = profile.documents.some((document) => document.type === "CERTIFICATION");
 
   return (
-    <div className="grid gap-6 lg:grid-cols-3">
-      <div className="space-y-6 lg:col-span-2">
-        <DetailSection title="Colloquio" icon={CalendarClock} className="border-primary/25">
-          {profile.nextInterviewOverdue && (
-            <p
-              role="status"
-              className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-400/25 dark:bg-amber-400/10 dark:text-amber-200"
-            >
-              Colloquio passato ancora segnato come programmato: aggiornane lo stato dalla tab Colloqui.
-            </p>
-          )}
-          {/* Data e ora restano sempre visibili (priorità HR), anche senza colloquio. */}
-          <DetailList>
-            <DetailField label="Data colloquio" emphasis>
-              {next && <span className="first-letter:uppercase">{formatLongDate(next.interview.scheduledAt)}</span>}
-            </DetailField>
-            <DetailField label="Ora colloquio" emphasis>
-              {next && <span className="tabular-nums">{formatTime(next.interview.scheduledAt)}</span>}
-            </DetailField>
-          </DetailList>
-          {next ? (
-            <DetailList className="mt-4">
+    <div className="grid items-start gap-6 lg:grid-cols-3">
+      <div className="min-w-0 space-y-6 lg:col-span-2">
+        {next && (
+          <DetailSection title="Colloquio programmato" icon={CalendarClock} className="border-primary/25">
+            <DetailList>
+              <DetailField label="Data colloquio" emphasis>
+                <span className="first-letter:uppercase">{formatLongDate(next.interview.scheduledAt)}</span>
+              </DetailField>
+              <DetailField label="Ora colloquio" emphasis>
+                <span className="tabular-nums">{formatTime(next.interview.scheduledAt)}</span>
+              </DetailField>
               <DetailField label="Tipo">{INTERVIEW_TYPE_LABELS[next.interview.type]}</DetailField>
               <DetailField label="Recruiter">{next.recruiter?.displayName}</DetailField>
               <DetailField label="Selezione" className="sm:col-span-2">
@@ -125,117 +90,38 @@ export function OverviewPanel({
                 </DetailField>
               )}
             </DetailList>
-          ) : (
-            <p className="mt-3 text-sm text-muted-foreground">Nessun colloquio in programma.</p>
+          </DetailSection>
+        )}
+
+        <PersonalDetailsPanel profile={profile} canEdit={canEdit} />
+        <CollectionEditor candidateId={candidate.id} kind="experiences" items={profile.experiences} canEdit={canEdit} />
+        <SkillsEditor candidateId={candidate.id} skills={profile.skills} canEdit={canEdit} />
+        <div className="grid gap-6 xl:grid-cols-2">
+          <CollectionEditor candidateId={candidate.id} kind="languages" items={profile.languages} canEdit={canEdit} />
+          <CollectionEditor
+            candidateId={candidate.id}
+            kind="drivingLicenses"
+            items={profile.drivingLicenses}
+            canEdit={canEdit}
+          />
+        </div>
+        <div className="space-y-3">
+          <CollectionEditor
+            candidateId={candidate.id}
+            kind="certifications"
+            items={profile.certifications}
+            canEdit={canEdit}
+          />
+          {hasCertificates && (
+            <div className="px-1 text-sm">
+              <p className="text-xs font-medium text-muted-foreground">Certificazioni allegate</p>
+              <DocumentLinks documents={profile.documents} type="CERTIFICATION" />
+            </div>
           )}
-        </DetailSection>
-
-        <DetailSection
-          title="Dati personali"
-          icon={IdCard}
-          action={
-            canEdit ? (
-              <span className="flex flex-wrap gap-2">
-                <EditIdentityButton candidate={candidate} label="Anagrafica" />
-                <EditProfileButton profile={profile.profile} label="Residenza" />
-              </span>
-            ) : undefined
-          }
-        >
-          <DetailList>
-            <DetailField label="Codice fiscale">
-              {candidate.fiscalCode && <span className="font-mono tracking-wide">{candidate.fiscalCode}</span>}
-            </DetailField>
-            <DetailField label="Data di nascita">
-              {candidate.birthDate && `${formatDate(candidate.birthDate)}${age !== null ? ` (${age} anni)` : ""}`}
-            </DetailField>
-            <DetailField label="Comune di residenza">{profile.profile.residenceCity}</DetailField>
-            <DetailField label="CAP">{profile.profile.residencePostalCode}</DetailField>
-            <DetailField label="Provincia">{profile.profile.residenceProvince}</DetailField>
-            <DetailField label="Categoria protetta (L. 68/99)">
-              {labelOf(PROTECTED_CATEGORY_LABELS, profile.profile.protectedCategory)}
-            </DetailField>
-            <DetailField label="Stato occupazionale">
-              {labelOf(EMPLOYMENT_STATUS_LABELS, profile.profile.employmentStatus)}
-            </DetailField>
-            <DetailField label="Genere">{labelOf(GENDER_LABELS, candidate.gender)}</DetailField>
-            <DetailField label="Nazionalità">{candidate.nationality}</DetailField>
-            <DetailField label="Permesso di soggiorno">
-              {labelOf(RESIDENCE_PERMIT_STATUS_LABELS, candidate.residencePermitStatus, "")}
-              {candidate.residencePermitExpiresOn && (
-                <span
-                  className={cn(
-                    "block text-xs",
-                    permitDays !== null && permitDays < 0
-                      ? "font-medium text-destructive"
-                      : permitDays !== null && permitDays <= 60
-                        ? "font-medium text-amber-700 dark:text-amber-400"
-                        : "text-muted-foreground",
-                  )}
-                >
-                  {permitDays !== null && permitDays < 0 ? "Scaduto il " : "Scade il "}
-                  {formatDate(candidate.residencePermitExpiresOn)}
-                </span>
-              )}
-              {candidate.residencePermitNotes && (
-                <span className="block text-xs whitespace-pre-line text-muted-foreground">
-                  {candidate.residencePermitNotes}
-                </span>
-              )}
-            </DetailField>
-          </DetailList>
-        </DetailSection>
-
-        <DetailSection title="Esperienza e disponibilità" icon={BriefcaseBusiness}>
-          <DetailList>
-            <DetailField label="Esperienza" className="sm:col-span-2">
-              {profile.experiences.length === 0 &&
-                [
-                  profile.profile.experienceMonths !== null && formatMonths(profile.profile.experienceMonths),
-                  profile.profile.experienceSector,
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
-              {profile.experiences.length > 0 && (
-                <span className="block space-y-1">
-                  <span className="block font-medium">{formatMonths(totalMonths)} complessivi</span>
-                  {profile.experiences.slice(0, 2).map((experience) => (
-                    <span key={experience.id} className="block text-muted-foreground">
-                      {experience.roleTitle} · {experience.companyName}
-                      {experience.currentRole && " (attuale)"}
-                    </span>
-                  ))}
-                </span>
-              )}
-            </DetailField>
-            <DetailField label="Disponibilità">
-              {labelOf(AVAILABILITY_LABELS, profile.preferences.availability, "")}
-            </DetailField>
-            <DetailField label="Note disponibilità">{profile.preferences.availabilityNotes}</DetailField>
-          </DetailList>
-        </DetailSection>
-
-        <DetailSection title="Feedback recruiter" icon={MessageSquareText}>
-          {latestFeedbacks.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nessun feedback registrato.</p>
-          ) : (
-            <ul className="space-y-4">
-              {latestFeedbacks.map((feedback) => (
-                <li key={feedback.id} className="space-y-1">
-                  <p className="text-sm leading-relaxed whitespace-pre-line">{feedback.content}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {FEEDBACK_TYPE_LABELS[feedback.type]} · {feedback.selectionTitle} · {feedback.author.displayName},{" "}
-                    {formatDateTime(feedback.createdAt)}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          )}
-        </DetailSection>
+        </div>
       </div>
 
-      <aside className="space-y-6" aria-label="Riepilogo">
-        {recommendations}
+      <aside className="min-w-0 space-y-6" aria-label="Riepilogo">
         <DetailSection
           title="Riepilogo"
           icon={UserRound}
@@ -243,70 +129,19 @@ export function OverviewPanel({
         >
           <dl className="grid gap-4">
             <DetailField label="Recruiter di riferimento">{profile.primaryRecruiter?.displayName}</DetailField>
-            {lastInterview && (
-              <DetailField label="Ultimo colloquio svolto da">
-                {lastInterview.recruiter?.displayName ?? "Recruiter non indicato"}
-                <span className="block text-xs text-muted-foreground">
-                  {formatDateTime(lastInterview.interview.scheduledAt)}
-                </span>
-              </DetailField>
-            )}
-            {profile.documents.some((document) => document.type === "INTERVIEW_EVALUATION") && (
-              <DetailField label="Schede di valutazione colloquio">
+            <DetailField label="Schede di valutazione colloquio">
+              {hasEvaluationDocuments ? (
                 <DocumentLinks documents={profile.documents} type="INTERVIEW_EVALUATION" />
-              </DetailField>
-            )}
-            <DetailField label="Patente e patentini">
-              {licenses.length > 0 ? licenses.join(", ") : "Nessuna indicata"}
-            </DetailField>
-            <DetailField label="Licenze e certificazioni professionali">
-              {profile.certifications.length > 0 ? (
-                <span className="block space-y-0.5">
-                  {profile.certifications.map((certification) => (
-                    <span key={certification.id} className="block">
-                      {certification.name}
-                      {certification.expiresAt && (
-                        <span className="text-xs text-muted-foreground">
-                          {" "}
-                          · scade il {formatDate(certification.expiresAt)}
-                        </span>
-                      )}
-                    </span>
-                  ))}
-                </span>
               ) : (
-                !profile.documents.some((document) => document.type === "CERTIFICATION") && "Nessuna indicata"
+                "Nessuna scheda allegata"
               )}
-              <DocumentLinks documents={profile.documents} type="CERTIFICATION" />
             </DetailField>
             <DetailField label="Candidature attive">
-              {String(profile.applications.filter((view) => !view.stage.isTerminal).length)}
-            </DetailField>
-            <DetailField label="Email">
-              {candidate.email && (
-                <a href={`mailto:${candidate.email}`} className="break-all underline-offset-4 hover:underline">
-                  {candidate.email}
-                </a>
+              {String(
+                profile.applications.filter((view) => !view.stage.isTerminal && view.application.closedAt === null)
+                  .length,
               )}
             </DetailField>
-            <DetailField label="Telefono">
-              {candidate.phone && (
-                <a href={`tel:${candidate.phone.replace(/\s+/g, "")}`} className="underline-offset-4 hover:underline">
-                  {candidate.phone}
-                </a>
-              )}
-            </DetailField>
-            {profile.tags.length > 0 && (
-              <DetailField label="Etichette">
-                <span className="flex flex-wrap gap-1.5">
-                  {profile.tags.map((tag) => (
-                    <span key={tag.id} className="rounded-md border bg-muted/50 px-2 py-0.5 text-xs">
-                      {tag.name}
-                    </span>
-                  ))}
-                </span>
-              </DetailField>
-            )}
           </dl>
         </DetailSection>
 
