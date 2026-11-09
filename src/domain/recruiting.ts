@@ -113,6 +113,8 @@ export type EvaluationResult = (typeof EVALUATION_RESULTS)[number];
 export interface ApplicationEvaluation {
   id: EntityId;
   applicationId: EntityId;
+  /** Colloquio valutato; null per valutazioni generali o precedenti al collegamento. */
+  interviewId: EntityId | null;
   result: EvaluationResult;
   reason: string | null;
   notes: string | null;

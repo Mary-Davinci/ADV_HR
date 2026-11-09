@@ -523,6 +523,7 @@ export class PostgresApplicationRepository implements ApplicationRepository {
     return {
       id: row.id,
       applicationId: row.applicationId,
+      interviewId: row.interviewId,
       result: row.result,
       reason: row.reason,
       notes: row.notes,
@@ -541,6 +542,7 @@ export class PostgresApplicationRepository implements ApplicationRepository {
     return rows.map(({ evaluation, authorName }) => ({
       id: evaluation.id,
       applicationId: evaluation.applicationId,
+      interviewId: evaluation.interviewId,
       result: evaluation.result,
       reason: evaluation.reason,
       notes: evaluation.notes,

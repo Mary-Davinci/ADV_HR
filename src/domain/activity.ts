@@ -62,6 +62,8 @@ export interface Activity {
 
 export type NewActivity = Omit<Activity, "id" | "actor" | "createdAt" | "candidateId" | "selectionId" | "companyId"> & {
   actorId: EntityId | null;
+  /** Data effettiva per contatti registrati a posteriori. */
+  createdAt?: Date;
   candidateId?: EntityId | null;
   selectionId?: EntityId | null;
   companyId?: EntityId | null;

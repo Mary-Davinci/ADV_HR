@@ -158,6 +158,7 @@ export interface ApplicationRepository {
 
   addEvaluation(input: {
     applicationId: EntityId;
+    interviewId?: EntityId | null;
     result: EvaluationResult;
     reason: string | null;
     notes: string | null;

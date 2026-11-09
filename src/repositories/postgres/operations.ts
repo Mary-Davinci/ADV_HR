@@ -114,7 +114,10 @@ export class PostgresInterviewRepository implements InterviewRepository {
     const { limit, offset } = pageBounds(query);
     const rows = await this.viewQuery()
       .where(interviewConditions(query))
-      .orderBy(query.order === "desc" ? desc(interviews.scheduledAt) : asc(interviews.scheduledAt))
+      .orderBy(
+        query.order === "desc" ? desc(interviews.scheduledAt) : asc(interviews.scheduledAt),
+        query.order === "desc" ? desc(interviews.id) : asc(interviews.id),
+      )
       .limit(limit)
       .offset(offset);
     return { total: toCount(rows[0]?.total ?? 0), items: rows.map((row) => this.toView(row)) };
@@ -227,6 +230,7 @@ export class PostgresActivityRepository implements ActivityRepository {
         selectionId: activity.selectionId ?? null,
         companyId: activity.companyId ?? null,
         metadata: activity.metadata,
+        createdAt: activity.createdAt,
       })
       .returning();
     if (!row) throw new Error("Registrazione attività fallita");

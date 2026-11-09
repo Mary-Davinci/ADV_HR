@@ -19,7 +19,6 @@ import {
 } from "@/features/candidates/components/profile/recommended-selections";
 import { SkillsEditor } from "@/features/candidates/components/skills-editor";
 import { DocumentsPanel } from "@/features/documents/components/documents-panel";
-import { InterviewList } from "@/features/interviews/components/interview-list";
 import { AddToSelectionButton } from "@/features/recruiting/components/add-application-buttons";
 import { StageBadge } from "@/features/recruiting/components/badges";
 import { FEATURES } from "@/config/features";
@@ -161,20 +160,6 @@ export default async function CandidatePage({ params, searchParams }: PageProps<
       ),
     },
     {
-      value: "interviews",
-      label: "Colloqui",
-      count: profile.interviews.length,
-      content: (
-        <InterviewList
-          items={profile.interviews}
-          recruiters={recruiters}
-          canManage={permissions.interview}
-          showCandidate={false}
-          emptyText="Nessun colloquio registrato."
-        />
-      ),
-    },
-    {
       value: "documents",
       label: "Documenti",
       count: profile.documents.length,
@@ -296,7 +281,7 @@ export default async function CandidatePage({ params, searchParams }: PageProps<
       <UrlTabs
         label="Sezioni della scheda candidato"
         tabs={tabs}
-        defaultValue={typeof tab === "string" ? tab : undefined}
+        defaultValue={typeof tab === "string" ? (tab === "interviews" ? "applications" : tab) : undefined}
       />
     </div>
   );

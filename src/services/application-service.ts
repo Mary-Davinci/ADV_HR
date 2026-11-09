@@ -12,6 +12,7 @@ import { assertCan } from "@/lib/auth/permissions";
 import type { ApplicationView, Repositories } from "@/repositories/types";
 
 import { ConflictError, NotFoundError, nowOf, recordEvent, type ServiceContext } from "./context";
+import { insertApplicationEvaluation } from "./application-evaluation";
 
 function contextOf(view: ApplicationView) {
   return { candidateId: view.candidate.id, selectionId: view.selection.id, companyId: view.company.id };
@@ -29,34 +30,9 @@ export function createApplicationService(context: ServiceContext) {
   async function insertEvaluation(
     repos: Repositories,
     view: ApplicationView,
-    input: { result: EvaluationResult; reason: string | null; notes: string | null },
+    input: { result: EvaluationResult; reason: string | null; notes: string | null; interviewId?: EntityId | null },
   ) {
-    assertValidEvaluation(input);
-    const evaluation = await repos.applications.addEvaluation({
-      applicationId: view.application.id,
-      result: input.result,
-      reason: input.reason?.trim() || null,
-      notes: input.notes?.trim() || null,
-      evaluatedBy: actor.id,
-    });
-    await repos.applications.touch(view.application.id);
-    await recordEvent(repos, actor, {
-      activity: {
-        entityType: "APPLICATION",
-        entityId: view.application.id,
-        action: "EVALUATION_ADDED",
-        ...contextOf(view),
-        metadata: { result: input.result },
-      },
-      // La motivazione può contenere valutazioni personali: nell'audit solo il fatto che esista.
-      audit: {
-        entityType: "APPLICATION",
-        entityId: view.application.id,
-        action: "EVALUATE",
-        changes: { result: input.result, reasonProvided: Boolean(input.reason?.trim()) },
-      },
-    });
-    return evaluation;
+    return insertApplicationEvaluation(repos, actor, view, input);
   }
 
   const service = {
@@ -243,7 +219,7 @@ export function createApplicationService(context: ServiceContext) {
 
     async evaluate(
       applicationId: EntityId,
-      input: { result: EvaluationResult; reason: string | null; notes: string | null },
+      input: { result: EvaluationResult; reason: string | null; notes: string | null; interviewId?: EntityId | null },
     ): Promise<void> {
       assertCan(actor, "evaluation.manage");
       assertValidEvaluation(input);

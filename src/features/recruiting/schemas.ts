@@ -8,7 +8,7 @@ import {
   INTERVIEW_TYPES,
   isEvaluationReasonRequired,
 } from "@/domain";
-import { optionalInt, optionalText, optionalUuid, uuidSchema } from "@/lib/zod-helpers";
+import { optionalEnum, optionalInt, optionalText, optionalUuid, uuidSchema } from "@/lib/zod-helpers";
 
 export const createApplicationSchema = z.object({
   candidateId: uuidSchema,
@@ -35,6 +35,7 @@ export const evaluationSchema = z
     result: z.enum(EVALUATION_RESULTS),
     reason: optionalText(1000),
     notes: optionalText(2000),
+    interviewId: optionalUuid.optional(),
   })
   .refine((value) => !isEvaluationReasonRequired(value.result) || Boolean(value.reason), {
     message: "Indica il motivo della non idoneità",
@@ -53,6 +54,22 @@ const dateTimeLocal = z
   .transform((value) => new Date(value))
   .refine((value) => !Number.isNaN(value.getTime()), "Data e ora non valide");
 
+export const completedInterviewSchema = z
+  .object({
+    applicationId: uuidSchema,
+    scheduledAt: dateTimeLocal,
+    durationMinutes: optionalInt(5, 600),
+    type: z.enum(INTERVIEW_TYPES),
+    recruiterId: uuidSchema,
+    notes: z.string().trim().min(3, "Scrivi il resoconto del colloquio").max(2000),
+    result: optionalEnum(EVALUATION_RESULTS),
+    reason: optionalText(1000),
+  })
+  .refine((value) => value.result !== "NOT_SUITABLE" || Boolean(value.reason), {
+    message: "Indica il motivo della non idoneità",
+    path: ["reason"],
+  });
+
 export const interviewSchema = z
   .object({
     scheduledAt: dateTimeLocal,
@@ -69,7 +86,7 @@ export const interviewSchema = z
       .transform((value) => value || null),
     notes: optionalText(2000),
   })
-  .refine((value) => value.location || value.meetingUrl || value.type === "SCREENING", {
+  .refine((value) => value.status !== "SCHEDULED" || value.location || value.meetingUrl || value.type === "SCREENING", {
     message: "Indica un luogo o un link per il colloquio",
     path: ["location"],
   });

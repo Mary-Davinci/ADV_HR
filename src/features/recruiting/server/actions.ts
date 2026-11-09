@@ -8,6 +8,7 @@ import { uuidSchema } from "@/lib/zod-helpers";
 import {
   applicationInput,
   changeStageSchema,
+  completedInterviewSchema,
   createApplicationSchema,
   createApplicationsSchema,
   evaluationSchema,
@@ -71,6 +72,15 @@ export async function scheduleInterviewAction(input: unknown) {
     input,
     { schema: applicationInput(interviewSchema), revalidate: revalidateApp },
     ({ applicationId, values }, services) => services.interviews.schedule(applicationId, values),
+  );
+}
+
+export async function recordCompletedInterviewAction(input: unknown) {
+  return runAction(
+    input,
+    { schema: z.object({ candidateId: uuidSchema, values: completedInterviewSchema }), revalidate: revalidateApp },
+    ({ candidateId, values: { applicationId, ...values } }, services) =>
+      services.interviews.recordCompleted(candidateId, applicationId, values),
   );
 }
 

@@ -1,7 +1,8 @@
-import { DomainRuleError, type EntityId } from "@/domain";
+import { assertValidEvaluation, DomainRuleError, type EntityId } from "@/domain";
 import { assertCan } from "@/lib/auth/permissions";
-import type { InterviewInput, InterviewQuery } from "@/repositories/types";
+import type { CompletedInterviewInput, InterviewInput, InterviewQuery } from "@/repositories/types";
 
+import { insertApplicationEvaluation } from "./application-evaluation";
 import { NotFoundError, nowOf, recordEvent, type ServiceContext } from "./context";
 
 export function createInterviewService(context: ServiceContext) {
@@ -19,6 +20,104 @@ export function createInterviewService(context: ServiceContext) {
       if (!view) return null;
       const feedbacks = await store.feedbacks.list({ interviewId: id });
       return { ...view, feedbacks };
+    },
+
+    async recordCompleted(candidateId: EntityId, applicationId: EntityId, input: CompletedInterviewInput) {
+      assertCan(actor, "interview.manage");
+      if (input.result) {
+        assertCan(actor, "evaluation.manage");
+        assertValidEvaluation({ result: input.result, reason: input.reason });
+      }
+      const now = nowOf(context);
+      if (!Number.isFinite(input.scheduledAt.getTime()) || input.scheduledAt.getTime() > now.getTime()) {
+        throw new DomainRuleError("Indica la data e l'ora di un colloquio già svolto.", "INTERVIEW_NOT_COMPLETED");
+      }
+      if (!input.notes.trim()) throw new DomainRuleError("Scrivi il resoconto del colloquio.", "REPORT_REQUIRED");
+      return store.transaction(async (repos) => {
+        const view = await repos.applications.getView(applicationId);
+        if (!view || view.candidate.id !== candidateId) throw new NotFoundError("Candidatura non trovata.");
+        const recruiters = await repos.users.listRecruiters();
+        if (!recruiters.some((recruiter) => recruiter.id === input.recruiterId)) {
+          throw new NotFoundError("Seleziona il recruiter che ha svolto il colloquio.");
+        }
+        const interview = await repos.interviews.create(applicationId, {
+          scheduledAt: input.scheduledAt,
+          durationMinutes: input.durationMinutes,
+          type: input.type,
+          recruiterId: input.recruiterId,
+          status: "COMPLETED",
+          notes: input.notes.trim(),
+          location: null,
+          meetingUrl: null,
+        });
+        const eventContext = { candidateId, selectionId: view.selection.id, companyId: view.company.id };
+        await recordEvent(repos, actor, {
+          activity: {
+            entityType: "INTERVIEW",
+            entityId: interview.id,
+            action: "INTERVIEW_COMPLETED",
+            ...eventContext,
+            metadata: {
+              scheduledAt: input.scheduledAt.toISOString(),
+              type: input.type,
+              recruiterId: input.recruiterId,
+            },
+          },
+          audit: {
+            entityType: "INTERVIEW",
+            entityId: interview.id,
+            action: "CREATE",
+            changes: { status: "COMPLETED", type: input.type },
+          },
+        });
+        await recordEvent(repos, actor, {
+          activity: {
+            entityType: "INTERVIEW",
+            entityId: interview.id,
+            action: "INTERVIEW",
+            ...eventContext,
+            createdAt: input.scheduledAt,
+            metadata: { recordedAt: now.toISOString() },
+          },
+        });
+        if (input.result) {
+          await insertApplicationEvaluation(repos, actor, view, {
+            result: input.result,
+            reason: input.reason,
+            notes: null,
+            interviewId: interview.id,
+          });
+        }
+        const earlyStage = ["NEW", "TO_REVIEW", "CONTACTED", "INTERVIEW_SCHEDULED"].includes(view.stage.code);
+        const upcoming = await repos.interviews.count({ applicationId, statuses: ["SCHEDULED"], from: now });
+        const completedStage = earlyStage && upcoming === 0 ? await repos.stages.getByCode("INTERVIEWED") : null;
+        if (completedStage?.active && view.application.closedAt === null) {
+          await repos.applications.updateStage(applicationId, completedStage.id, null);
+          await recordEvent(repos, actor, {
+            activity: {
+              entityType: "APPLICATION",
+              entityId: applicationId,
+              action: "STATUS_CHANGED",
+              ...eventContext,
+              metadata: {
+                from: view.stage.code,
+                to: completedStage.code,
+                fromLabel: view.stage.label,
+                toLabel: completedStage.label,
+              },
+            },
+            audit: {
+              entityType: "APPLICATION",
+              entityId: applicationId,
+              action: "STAGE_CHANGE",
+              changes: { from: view.stage.code, to: completedStage.code },
+            },
+          });
+        } else {
+          await repos.applications.touch(applicationId);
+        }
+        return { id: interview.id };
+      });
     },
 
     async schedule(applicationId: EntityId, input: InterviewInput): Promise<{ id: EntityId }> {

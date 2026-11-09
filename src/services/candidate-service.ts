@@ -178,13 +178,25 @@ export function createCandidateService(context: ServiceContext) {
 
       const [applications, interviews, feedbacks, documents, timeline, talentPools, lastContactAt] = await Promise.all([
         store.applications.list({ candidateId: id }),
-        store.interviews.list({ candidateId: id, order: "desc", limit: 100 }),
+        store.interviews.list({ candidateId: id, order: "desc", limit: 200 }),
         store.feedbacks.list({ candidateId: id }),
         store.documents.list({ candidateId: id }),
         store.activities.list({ candidateId: id, limit: 100 }),
         store.talentPools.poolsOfCandidate(id),
         store.activities.lastContactAt(id),
       ]);
+
+      // Lo storico completo non deve scomparire quando supera la prima pagina.
+      while (interviews.items.length < interviews.total) {
+        const next = await store.interviews.list({
+          candidateId: id,
+          order: "desc",
+          limit: 200,
+          offset: interviews.items.length,
+        });
+        if (next.items.length === 0) break;
+        interviews.items.push(...next.items);
+      }
 
       const evaluationLists = await Promise.all(
         applications.map((view) => store.applications.listEvaluations(view.application.id)),

@@ -2,9 +2,11 @@ import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { seedDatabase } from "@/db/seed/seed";
+import { interviews as interviewTable } from "@/db/schema";
 import { DomainRuleError, type RoleCode, type SessionUser } from "@/domain";
 import { ForbiddenError } from "@/lib/auth/permissions";
 import { buildInterviewQuery, interviewFiltersSchema } from "@/features/interviews/filters";
+import type { CompletedInterviewInput } from "@/repositories/types";
 import { createLoginRateLimiter } from "@/lib/auth/login-rate-limit";
 import { createTestDatabase, type TestDatabase } from "@/test/test-database";
 
@@ -442,6 +444,193 @@ describe("services", () => {
       expect(summary.kpi.overdueTasks).toBe(2);
       expect(summary.upcomingInterviews.length).toBeGreaterThan(0);
       expect(summary.recentActivities.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("candidate interview reports", () => {
+    const report = (): CompletedInterviewInput => ({
+      scheduledAt: new Date(NOW.getTime() - 3 * 86_400_000),
+      durationMinutes: 40,
+      type: "HR",
+      recruiterId: actors.recruiter.id,
+      notes: "Esperienza coerente con la posizione e buona autonomia.",
+      result: "SUITABLE",
+      reason: "Requisiti soddisfatti",
+    });
+
+    it("preserves existing application evaluations without inventing an interview", async () => {
+      const view = await applicationOf("Longo");
+      await createApplicationService(ctx(actors.recruiter)).evaluate(view.application.id, {
+        result: "SUITABLE",
+        reason: "Esperienza verificata",
+        notes: "Valutazione precedente al nuovo storico",
+      });
+      const profile = await createCandidateService(ctx(actors.recruiter)).getProfile(view.candidate.id);
+      expect(profile?.evaluations[view.application.id]).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            result: "SUITABLE",
+            reason: "Esperienza verificata",
+            notes: "Valutazione precedente al nuovo storico",
+            interviewId: null,
+            evaluatedBy: expect.objectContaining({ id: actors.recruiter.id }),
+          }),
+        ]),
+      );
+    });
+
+    it("records the actual interview, author, report and linked outcome in the correct candidate history", async () => {
+      const view = await applicationOf("Barbieri");
+      const input = report();
+      const service = createInterviewService(ctx(actors.admin));
+      const { id } = await service.recordCompleted(view.candidate.id, view.application.id, input);
+      const profile = await createCandidateService(ctx(actors.admin)).getProfile(view.candidate.id);
+      const entry = profile?.interviews.find((item) => item.interview.id === id);
+      expect(entry).toMatchObject({
+        interview: {
+          applicationId: view.application.id,
+          scheduledAt: input.scheduledAt,
+          notes: input.notes,
+          status: "COMPLETED",
+        },
+        recruiter: { id: actors.recruiter.id },
+      });
+      expect(entry!.interview.createdAt.getTime()).toBeGreaterThan(input.scheduledAt.getTime());
+      expect(profile?.evaluations[view.application.id]).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            interviewId: id,
+            result: "SUITABLE",
+            reason: input.reason,
+            evaluatedBy: { id: actors.admin.id, displayName: actors.admin.name },
+          }),
+        ]),
+      );
+      expect(profile?.applications.find((item) => item.application.id === view.application.id)?.stage.code).toBe(
+        "INTERVIEWED",
+      );
+      const activities = await testDb.store.activities.list({ entity: { type: "INTERVIEW", id } });
+      expect(activities.find((activity) => activity.action === "INTERVIEW")?.createdAt).toEqual(input.scheduledAt);
+      const otherCandidate = await applicationOf("Galli");
+      const other = await createCandidateService(ctx(actors.admin)).getProfile(otherCandidate.candidate.id);
+      expect(other?.interviews.map((item) => item.interview.id)).not.toContain(id);
+
+      await createApplicationService(ctx(actors.recruiter)).evaluate(view.application.id, {
+        interviewId: id,
+        result: "NOT_SUITABLE",
+        reason: "Disponibilità non compatibile",
+        notes: "Seconda valutazione",
+      });
+      await service.remove(id);
+      const preserved = await testDb.store.applications.listEvaluations(view.application.id);
+      expect(
+        preserved.filter((item) => item.reason === input.reason || item.notes === "Seconda valutazione"),
+      ).toHaveLength(2);
+      expect(preserved.every((item) => item.interviewId === null)).toBe(true);
+    });
+
+    it("rejects future dates, missing reasons, wrong candidates and unauthorized recruiters without writes", async () => {
+      const view = await applicationOf("Longo");
+      const other = await applicationOf("Galli");
+      const service = createInterviewService(ctx(actors.recruiter));
+      const before = await countRows("interviews");
+      await expect(
+        createInterviewService(ctx(actors.viewer)).recordCompleted(view.candidate.id, view.application.id, report()),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+      await expect(service.recordCompleted(other.candidate.id, view.application.id, report())).rejects.toThrow(
+        "Candidatura non trovata",
+      );
+      await expect(
+        service.recordCompleted(view.candidate.id, view.application.id, { ...report(), recruiterId: actors.viewer.id }),
+      ).rejects.toThrow("recruiter");
+      await expect(
+        service.recordCompleted(view.candidate.id, view.application.id, {
+          ...report(),
+          scheduledAt: new Date(NOW.getTime() + 60_000),
+        }),
+      ).rejects.toThrow("già svolto");
+      await expect(
+        service.recordCompleted(view.candidate.id, view.application.id, {
+          ...report(),
+          result: "NOT_SUITABLE",
+          reason: " ",
+        }),
+      ).rejects.toThrow("motivazione");
+      expect(await countRows("interviews")).toBe(before);
+    });
+
+    it("rolls back the interview and audit when saving the outcome fails", async () => {
+      const view = await applicationOf("Longo");
+      const before = await countRows("interviews");
+      const auditBefore = await countRows("audit_logs");
+      const service = createInterviewService({
+        ...ctx(actors.recruiter),
+        store: {
+          ...testDb.store,
+          transaction: (work) =>
+            testDb.store.transaction((repos) => {
+              repos.applications.addEvaluation = async () => {
+                throw new Error("Outcome unavailable");
+              };
+              return work(repos);
+            }),
+        },
+      });
+      await expect(service.recordCompleted(view.candidate.id, view.application.id, report())).rejects.toThrow(
+        "Outcome unavailable",
+      );
+      expect(await countRows("interviews")).toBe(before);
+      expect(await countRows("audit_logs")).toBe(auditBefore);
+    });
+
+    it("loads all past interviews even across multiple pages with the same date", async () => {
+      const view = await applicationOf("Longo");
+      const inserted = await testDb.db
+        .insert(interviewTable)
+        .values(
+          Array.from({ length: 205 }, () => ({
+            applicationId: view.application.id,
+            scheduledAt: report().scheduledAt,
+            status: "COMPLETED" as const,
+            recruiterId: actors.recruiter.id,
+            notes: "Colloquio storico",
+          })),
+        )
+        .returning({ id: interviewTable.id });
+      const profile = await createCandidateService(ctx(actors.admin)).getProfile(view.candidate.id);
+      const ids = profile!.interviews.map((item) => item.interview.id);
+      expect(new Set(ids).size).toBe(ids.length);
+      for (const row of inserted) expect(ids).toContain(row.id);
+    });
+
+    it("keeps a future interview scheduled when a past interview is recorded", async () => {
+      const view = await applicationOf("Cattaneo");
+      const before = await testDb.store.applications.getById(view.application.id);
+      await createInterviewService(ctx(actors.recruiter)).recordCompleted(view.candidate.id, view.application.id, {
+        ...report(),
+        result: null,
+        reason: null,
+      });
+      const after = await testDb.store.applications.getById(view.application.id);
+      expect(after?.stageId).toBe(before?.stageId);
+    });
+
+    it("rejects an outcome linked to another application's interview", async () => {
+      const view = await applicationOf("Longo");
+      const other = await applicationOf("Galli");
+      const { id } = await createInterviewService(ctx(actors.recruiter)).recordCompleted(
+        other.candidate.id,
+        other.application.id,
+        { ...report(), result: null, reason: null },
+      );
+      await expect(
+        createApplicationService(ctx(actors.recruiter)).evaluate(view.application.id, {
+          interviewId: id,
+          result: "SUITABLE",
+          reason: null,
+          notes: null,
+        }),
+      ).rejects.toThrow("non appartiene");
     });
   });
 

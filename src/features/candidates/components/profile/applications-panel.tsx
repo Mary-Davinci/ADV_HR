@@ -6,6 +6,12 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { EVALUATION_RESULT_LABELS, FEEDBACK_TYPE_LABELS, INTERVIEW_TYPE_LABELS } from "@/config/labels";
 import type { RecruitingStage, UserRef } from "@/domain";
 import { ApplicationActions } from "@/features/recruiting/components/application-actions";
+import {
+  InterviewReportActions,
+  RegisterCompletedInterviewButton,
+} from "@/features/interviews/components/candidate-interview-actions";
+import { InterviewEditButton } from "@/features/interviews/components/interview-edit-button";
+import { InterviewDeleteButton } from "@/features/interviews/components/interview-delete-button";
 import { EvaluationBadge, InterviewStatusBadge, StageBadge } from "@/features/recruiting/components/badges";
 import { formatDateTime, formatSlot, formatTimeAgo } from "@/lib/format";
 import type { CandidateProfileView } from "@/services/candidate-service";
@@ -41,8 +47,11 @@ export function ApplicationsPanel({
   return (
     <div className="space-y-4">
       {profile.applications.map((view) => {
-        const evaluations = profile.evaluations[view.application.id] ?? [];
-        const feedbacks = profile.feedbacks.filter((feedback) => feedback.applicationId === view.application.id);
+        const allEvaluations = profile.evaluations[view.application.id] ?? [];
+        const evaluations = allEvaluations.filter((evaluation) => !evaluation.interviewId);
+        const feedbacks = profile.feedbacks.filter(
+          (feedback) => feedback.applicationId === view.application.id && !feedback.interviewId,
+        );
         const interviews = profile.interviews.filter((item) => item.interview.applicationId === view.application.id);
         const headingId = `application-${view.application.id}`;
         return (
@@ -68,16 +77,30 @@ export function ApplicationsPanel({
                   <EvaluationBadge result={view.latestEvaluation?.result ?? null} />
                 </div>
               </div>
-              <ApplicationActions
-                applicationId={view.application.id}
-                candidateName={profile.fullName}
-                stageId={view.stage.id}
-                stages={stages}
-                interviews={interviews.map((item) => item.interview)}
-                recruiters={recruiters}
-                recruiterId={view.application.recruiterId}
-                permissions={permissions}
-              />
+              <div className="flex flex-wrap gap-2">
+                <ApplicationActions
+                  applicationId={view.application.id}
+                  candidateName={profile.fullName}
+                  stageId={view.stage.id}
+                  stages={stages}
+                  interviews={interviews.map((item) => item.interview)}
+                  recruiters={recruiters}
+                  recruiterId={view.application.recruiterId}
+                  permissions={permissions}
+                />
+                {permissions.interview && (
+                  <RegisterCompletedInterviewButton
+                    candidateId={profile.candidate.id}
+                    candidateName={profile.fullName}
+                    applications={[
+                      { id: view.application.id, label: `${view.selection.title} · ${view.company.name}` },
+                    ]}
+                    recruiters={recruiters}
+                    defaultRecruiterId={view.application.recruiterId}
+                    canEvaluate={permissions.evaluate}
+                  />
+                )}
+              </div>
             </CardHeader>
             <CardContent className="grid gap-6 md:grid-cols-3">
               <dl className="grid content-start gap-3 text-sm">
@@ -109,7 +132,8 @@ export function ApplicationsPanel({
                         {evaluation.reason && <p className="text-muted-foreground">Motivo: {evaluation.reason}</p>}
                         {evaluation.notes && <p className="text-muted-foreground">{evaluation.notes}</p>}
                         <p className="text-xs text-muted-foreground">
-                          {evaluation.evaluatedBy.displayName}, {formatDateTime(evaluation.evaluatedAt)}
+                          Esito registrato da {evaluation.evaluatedBy.displayName} il{" "}
+                          {formatDateTime(evaluation.evaluatedAt)}
                         </p>
                       </li>
                     ))}
@@ -139,18 +163,99 @@ export function ApplicationsPanel({
               {interviews.length > 0 && (
                 <div className="space-y-2 md:col-span-3">
                   <h4 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Colloqui</h4>
-                  <ul className="flex flex-wrap gap-2">
-                    {interviews.map((item) => (
-                      <li
-                        key={item.interview.id}
-                        className="flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-sm"
-                      >
-                        <span>
-                          {INTERVIEW_TYPE_LABELS[item.interview.type]} · {formatDateTime(item.interview.scheduledAt)}
-                        </span>
-                        <InterviewStatusBadge status={item.interview.status} />
-                      </li>
-                    ))}
+                  <ul className="space-y-3">
+                    {interviews.map((item) => {
+                      const outcomes = allEvaluations.filter(
+                        (evaluation) => evaluation.interviewId === item.interview.id,
+                      );
+                      const interviewFeedbacks = profile.feedbacks.filter(
+                        (feedback) => feedback.interviewId === item.interview.id,
+                      );
+                      return (
+                        <li key={item.interview.id} className="space-y-3 rounded-lg border p-4 text-sm">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="font-medium">{INTERVIEW_TYPE_LABELS[item.interview.type]}</p>
+                            <InterviewStatusBadge status={item.interview.status} />
+                          </div>
+                          <dl className="grid gap-3 sm:grid-cols-3">
+                            <div>
+                              <dt className="text-xs text-muted-foreground">
+                                {item.interview.status === "COMPLETED" ? "Effettuato il" : "Previsto il"}
+                              </dt>
+                              <dd>
+                                <time dateTime={item.interview.scheduledAt.toISOString()}>
+                                  {formatDateTime(item.interview.scheduledAt)}
+                                </time>
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="text-xs text-muted-foreground">Registrato il</dt>
+                              <dd>
+                                <time dateTime={item.interview.createdAt.toISOString()}>
+                                  {formatDateTime(item.interview.createdAt)}
+                                </time>
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="text-xs text-muted-foreground">
+                                {item.interview.status === "COMPLETED" ? "Svolto da" : "Recruiter"}
+                              </dt>
+                              <dd>{item.recruiter?.displayName ?? "Non indicato"}</dd>
+                            </div>
+                          </dl>
+                          {item.interview.notes && (
+                            <p className="whitespace-pre-wrap">
+                              <span className="font-medium">Resoconto: </span>
+                              {item.interview.notes}
+                            </p>
+                          )}
+                          {outcomes.map((evaluation) => (
+                            <div key={evaluation.id} className="space-y-1 border-t pt-3">
+                              <EvaluationBadge result={evaluation.result} />
+                              {evaluation.reason && (
+                                <p className="whitespace-pre-wrap">Motivazione: {evaluation.reason}</p>
+                              )}
+                              {evaluation.notes && <p className="whitespace-pre-wrap">{evaluation.notes}</p>}
+                              <p className="text-xs text-muted-foreground">
+                                Esito registrato da {evaluation.evaluatedBy.displayName} il{" "}
+                                {formatDateTime(evaluation.evaluatedAt)}
+                              </p>
+                            </div>
+                          ))}
+                          {interviewFeedbacks.map((feedback) => (
+                            <div key={feedback.id} className="space-y-1 border-t pt-3">
+                              <p className="whitespace-pre-wrap">{feedback.content}</p>
+                              <p className="text-xs text-muted-foreground">
+                                Feedback di {feedback.author.displayName} · {formatDateTime(feedback.createdAt)}
+                              </p>
+                            </div>
+                          ))}
+                          <div className="flex flex-wrap gap-2">
+                            {item.interview.status === "COMPLETED" && (
+                              <InterviewReportActions
+                                interview={item.interview}
+                                candidateName={profile.fullName}
+                                canEvaluate={permissions.evaluate}
+                                canFeedback={permissions.feedback}
+                              />
+                            )}
+                            {permissions.interview && (
+                              <>
+                                <InterviewEditButton
+                                  interview={item.interview}
+                                  candidateName={profile.fullName}
+                                  recruiters={recruiters}
+                                />
+                                <InterviewDeleteButton
+                                  interviewId={item.interview.id}
+                                  candidateName={profile.fullName}
+                                />
+                              </>
+                            )}
+                          </div>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
               )}

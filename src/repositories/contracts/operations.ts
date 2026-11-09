@@ -5,6 +5,7 @@ import type {
   DocumentProcessingStatus,
   DocumentType,
   EntityId,
+  EvaluationResult,
   Feedback,
   FeedbackType,
   Interview,
@@ -58,6 +59,13 @@ export type InterviewInput = {
   location: string | null;
   meetingUrl: string | null;
   notes: string | null;
+};
+
+export type CompletedInterviewInput = Pick<InterviewInput, "scheduledAt" | "durationMinutes" | "type"> & {
+  recruiterId: EntityId;
+  notes: string;
+  result: EvaluationResult | null;
+  reason: string | null;
 };
 
 export interface InterviewRepository {

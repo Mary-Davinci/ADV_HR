@@ -37,7 +37,7 @@ export interface ApplicationActionsProps {
   candidateName: string;
   stageId: string;
   stages: RecruitingStage[];
-  interviews: Array<Pick<Interview, "id" | "scheduledAt" | "type">>;
+  interviews: Array<Pick<Interview, "id" | "scheduledAt" | "type" | "status">>;
   recruiters: Array<{ id: string; displayName: string }>;
   recruiterId: string | null;
   permissions: { manage: boolean; evaluate: boolean; feedback: boolean; interview: boolean };
@@ -185,7 +185,12 @@ export function ApplicationActions(props: ApplicationActionsProps) {
           stageId={rejectStage.id}
         />
       )}
-      <EvaluationDialog {...dialogs.props("evaluate")} applicationId={applicationId} candidateName={candidateName} />
+      <EvaluationDialog
+        {...dialogs.props("evaluate")}
+        applicationId={applicationId}
+        candidateName={candidateName}
+        interviews={props.interviews}
+      />
       <FeedbackDialog
         {...dialogs.props("feedback")}
         applicationId={applicationId}

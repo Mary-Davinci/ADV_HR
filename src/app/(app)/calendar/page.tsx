@@ -43,7 +43,7 @@ function EventLink({ view, compact }: { view: InterviewView; compact?: boolean }
   const cancelled = view.interview.status === "CANCELLED" || view.interview.status === "NO_SHOW";
   return (
     <Link
-      href={`/recruiting/${view.candidate.id}?tab=interviews`}
+      href={`/recruiting/${view.candidate.id}?tab=applications`}
       className={cn(
         "block truncate rounded-md border-l-2 px-1.5 py-0.5 text-xs outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring",
         cancelled ? "border-muted-foreground/40 text-muted-foreground line-through" : "border-primary bg-accent/60",

@@ -87,8 +87,18 @@ export function RejectDialog({
 
 type EvaluationInput = z.input<typeof evaluationSchema>;
 
-export function EvaluationDialog({ open, onOpenChange, applicationId, candidateName }: DialogProps) {
-  const defaults: EvaluationInput = { result: "SUITABLE", reason: "", notes: "" };
+export function EvaluationDialog({
+  open,
+  onOpenChange,
+  applicationId,
+  candidateName,
+  interviewId,
+  interviews = [],
+}: DialogProps & {
+  interviewId?: string;
+  interviews?: Array<Pick<Interview, "id" | "scheduledAt" | "type" | "status">>;
+}) {
+  const defaults: EvaluationInput = { result: "SUITABLE", reason: "", notes: "", interviewId: interviewId ?? "" };
   const form = useForm<EvaluationInput>({ resolver: actionResolver(evaluationSchema), defaultValues: defaults });
   const result = useWatch({ control: form.control, name: "result" });
   const mutation = useActionMutation(evaluateApplicationAction, {
@@ -104,7 +114,11 @@ export function EvaluationDialog({ open, onOpenChange, applicationId, candidateN
         onOpenChange(next);
       }}
       title={`Valuta ${candidateName}`}
-      description="La valutazione riguarda questa candidatura, non il candidato in assoluto. Lo storico resta consultabile."
+      description={
+        interviewId
+          ? "L'esito sarà collegato a questo colloquio nello storico del candidato."
+          : "La valutazione riguarda questa candidatura, non il candidato in assoluto. Lo storico resta consultabile."
+      }
       form={form}
       onSubmit={(values) => mutation.mutate({ applicationId, values })}
       isPending={mutation.isPending}
@@ -116,6 +130,19 @@ export function EvaluationDialog({ open, onOpenChange, applicationId, candidateN
         required
         options={optionsOf(EVALUATION_RESULT_LABELS)}
       />
+      {!interviewId && interviews.some((item) => item.status === "COMPLETED") && (
+        <SelectField<EvaluationInput>
+          name="interviewId"
+          label="Colloquio valutato"
+          emptyLabel="Valutazione generale della candidatura"
+          options={interviews
+            .filter((item) => item.status === "COMPLETED")
+            .map((item) => ({
+              value: item.id,
+              label: `${INTERVIEW_TYPE_LABELS[item.type]} · ${formatDateTime(item.scheduledAt)}`,
+            }))}
+        />
+      )}
       <TextareaField<EvaluationInput>
         name="reason"
         label="Motivazione"
@@ -231,6 +258,7 @@ export function InterviewDialog({
         notes: "",
       };
   const form = useForm<InterviewInput>({ resolver: actionResolver(interviewSchema), defaultValues: defaults });
+  const status = useWatch({ control: form.control, name: "status" });
   const schedule = useActionMutation(scheduleInterviewAction, {
     successMessage: "Colloquio programmato",
     onSuccess: () => onOpenChange(false),
@@ -257,7 +285,12 @@ export function InterviewDialog({
       size="lg"
     >
       <FieldRow>
-        <TextField<InterviewInput> name="scheduledAt" label="Data e ora" type="datetime-local" required />
+        <TextField<InterviewInput>
+          name="scheduledAt"
+          label={status === "COMPLETED" ? "Data e ora effettive" : "Data e ora previste"}
+          type="datetime-local"
+          required
+        />
         <TextField<InterviewInput> name="durationMinutes" label="Durata (minuti)" type="number" />
       </FieldRow>
       <FieldRow>
@@ -279,7 +312,12 @@ export function InterviewDialog({
         <TextField<InterviewInput> name="location" label="Luogo" maxLength={200} />
         <TextField<InterviewInput> name="meetingUrl" label="Link videochiamata" type="url" maxLength={500} />
       </FieldRow>
-      <TextareaField<InterviewInput> name="notes" label="Note organizzative" rows={2} maxLength={2000} />
+      <TextareaField<InterviewInput>
+        name="notes"
+        label={status === "COMPLETED" ? "Resoconto del colloquio" : "Note organizzative"}
+        rows={4}
+        maxLength={2000}
+      />
     </FormDialog>
   );
 }

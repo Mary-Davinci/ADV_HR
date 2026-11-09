@@ -127,6 +127,13 @@
       "when": 1794218507421,
       "tag": "0017_candidate_nationality_residence_permit",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1794223350960,
+      "tag": "0018_interview_evaluation_history",
+      "breakpoints": true
     }
   ]
 }

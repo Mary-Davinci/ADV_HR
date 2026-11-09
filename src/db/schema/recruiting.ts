@@ -150,6 +150,7 @@ export const applicationEvaluations = pgTable(
     applicationId: uuid("application_id")
       .notNull()
       .references(() => applications.id, { onDelete: "cascade" }),
+    interviewId: uuid("interview_id").references(() => interviews.id, { onDelete: "set null" }),
     result: evaluationResultEnum("result").notNull(),
     reason: text("reason"),
     notes: text("notes"),
@@ -160,6 +161,7 @@ export const applicationEvaluations = pgTable(
   },
   (t) => [
     index("application_evaluations_application_idx").on(t.applicationId, t.evaluatedAt),
+    index("application_evaluations_interview_idx").on(t.interviewId),
     // Difesa in profondità: anche il database rifiuta un "non idoneo" senza motivazione.
     check(
       "application_evaluations_reason_ck",
