@@ -3,6 +3,8 @@
  *
  *   npm run sync:adv-core                 esecuzione manuale
  *   npm run sync:adv-core -- --scheduled  usata dall'Utilità di pianificazione (lun-ven 13:20 e 18:20)
+ *   npm run sync:adv-core:prod             stessa sincronizzazione verso la produzione: .env.railway
+ *                                          (database e S3 di Railway) prevale su .env.local
  *
  * Codici di uscita: 0 = SUCCESS, 2 = PARTIAL, 1 = FAILED o configurazione errata,
  * 3 = un'altra sincronizzazione è già in corso.
@@ -53,6 +55,18 @@ async function main(): Promise<number> {
     if (!lock.rows[0]?.ok) {
       log("Un'altra sincronizzazione ADV Core è in corso: esecuzione saltata.");
       return 3;
+    }
+
+    // Un database con candidati ma senza collegamenti ad ADV Core non è mai stato sincronizzato:
+    // procedere duplicherebbe chi non ha codice fiscale. Va verificato a mano prima.
+    const linked = await lockClient.query<{ candidates: number; mappings: number }>(
+      `SELECT (SELECT count(*) FROM candidates)::int AS candidates,
+              (SELECT count(*) FROM legacy_mappings WHERE entity_type = 'CANDIDATE')::int AS mappings`,
+    );
+    const { candidates = 0, mappings = 0 } = linked.rows[0] ?? {};
+    if (candidates > 0 && mappings === 0) {
+      log(`Database con ${candidates} candidati ma nessun collegamento ad ADV Core: sincronizzazione bloccata.`);
+      return 1;
     }
 
     const db = drizzle(pool, { casing: "snake_case" }) as unknown as Database;

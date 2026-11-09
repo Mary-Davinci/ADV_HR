@@ -55,6 +55,15 @@ powershell -ExecutionPolicy Bypass -File scripts\windows\registra-sync-adv-core.
 | `DOCUMENT_STORAGE_DIR`      | cartella dello storage `local`                                                |
 | `S3_*`                      | bucket dello storage `s3`, vedi `.env.example`                                |
 
+## Produzione dal PC ufficio (soluzione attuale)
+
+Finché il servizio `sync` su Railway non esiste, la produzione si aggiorna da questo PC, già
+autorizzato in ADV CORE: `npm run sync:adv-core:prod` usa `.env.local` per ADV CORE e
+`.env.railway` (escluso da git) per database pubblico e bucket S3 di Railway. L'attività pianificata
+si registra con `registra-sync-adv-core.ps1 -Produzione`. Se la password del database su Railway
+cambia, va aggiornato `DATABASE_URL` in `.env.railway`. Il sync si rifiuta di partire su un database
+con candidati ma senza collegamenti ad ADV CORE, per non creare duplicati.
+
 ## Produzione su Railway
 
 ```

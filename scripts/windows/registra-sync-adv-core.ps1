@@ -4,12 +4,15 @@
 # Uso (PowerShell, dalla cartella del progetto ADV_HR):
 #   powershell -ExecutionPolicy Bypass -File scripts\windows\registra-sync-adv-core.ps1
 #   powershell -ExecutionPolicy Bypass -File scripts\windows\registra-sync-adv-core.ps1 -Rimuovi
+#   powershell -ExecutionPolicy Bypass -File scripts\windows\registra-sync-adv-core.ps1 -Produzione
+#     (scrive nel database di produzione su Railway: richiede .env.railway aggiornato)
 #
 # Se il PC è spento all'orario previsto, la sincronizzazione parte appena possibile
 # (StartWhenAvailable). Prerequisiti: .env.local compilato, PostgreSQL di ADV_HR avviato.
 
 param(
     [switch]$Rimuovi,
+    [switch]$Produzione,
     [string]$NomeAttivita = 'ADV_HR - Sincronizzazione ADV Core'
 )
 
@@ -25,6 +28,11 @@ $progetto = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 if (-not (Test-Path (Join-Path $progetto 'package.json'))) { throw "Cartella del progetto non trovata: $progetto" }
 if (-not (Test-Path (Join-Path $progetto '.env.local'))) { throw '.env.local mancante: compilarlo prima (vedi .env.example).' }
 $npm = (Get-Command npm.cmd -ErrorAction Stop).Source
+$comando = 'sync:adv-core'
+if ($Produzione) {
+    if (-not (Test-Path (Join-Path $progetto '.env.railway'))) { throw '.env.railway mancante: serve per la produzione.' }
+    $comando = 'sync:adv-core:prod'
+}
 
 $giorni = 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'
 $trigger = foreach ($ora in '13:20', '18:20') {
@@ -35,7 +43,7 @@ $trigger = foreach ($ora in '13:20', '18:20') {
     $t
 }
 $azione = New-ScheduledTaskAction -Execute 'cmd.exe' `
-    -Argument "/c `"`"$npm`" run sync:adv-core -- --scheduled`"" `
+    -Argument "/c `"`"$npm`" run $comando -- --scheduled`"" `
     -WorkingDirectory $progetto
 $impostazioni = New-ScheduledTaskSettingsSet `
     -StartWhenAvailable `
@@ -48,7 +56,7 @@ Register-ScheduledTask -TaskName $NomeAttivita -Trigger $trigger -Action $azione
 
 $task = Get-ScheduledTask -TaskName $NomeAttivita
 Write-Host "Attività '$NomeAttivita' registrata." -ForegroundColor Green
-Write-Host "  Orari: lun-ven 13:20 e 18:20 - cartella: $progetto"
+Write-Host "  Orari: lun-ven 13:20 e 18:20 - cartella: $progetto - comando: npm run $comando"
 Write-Host "  Prossima esecuzione: $((Get-ScheduledTaskInfo -TaskName $NomeAttivita).NextRunTime)"
 Write-Host "  Prova subito:  Start-ScheduledTask -TaskName '$NomeAttivita'"
 Write-Host "  Esito: storage\logs\adv-core-sync-AAAA-MM.log e tabella adv_core_sync_runs"

@@ -20,6 +20,7 @@
     "db:reset": "tsx --env-file-if-exists=.env.local src/db/reset.ts",
     "db:studio": "drizzle-kit studio",
     "sync:adv-core": "tsx --env-file-if-exists=.env.local src/repositories/adv-core/run-sync.ts",
+    "sync:adv-core:prod": "tsx --env-file=.env.local --env-file=.env.railway src/repositories/adv-core/run-sync.ts",
     "cv:index": "tsx --env-file-if-exists=.env.local src/services/cv-text/run-index.ts",
     "storage:to-s3": "tsx --env-file-if-exists=.env.local src/services/storage/run-migrate-to-s3.ts",
     "storage:backup": "tsx src/services/storage/run-backup.ts",
