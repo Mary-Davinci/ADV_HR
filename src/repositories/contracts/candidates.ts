@@ -18,6 +18,7 @@ import type {
   EducationLevel,
   EmploymentStatus,
   EntityId,
+  EvaluationResult,
   Gender,
   ResidencePermitStatus,
   ISODate,
@@ -98,6 +99,7 @@ export interface CandidateListItem {
     stageLabel: string;
     selectionTitle: string;
     companyName: string;
+    latestEvaluationResult: EvaluationResult | null;
     recruiter: UserRef | null;
   } | null;
   nextInterviewAt: Date | null;

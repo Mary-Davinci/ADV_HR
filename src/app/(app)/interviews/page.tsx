@@ -1,81 +1,35 @@
-import { endOfDay, isValid, parseISO, startOfDay } from "date-fns";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { z } from "zod";
 
 import { PageHeader } from "@/components/common/page-header";
 import { Pagination } from "@/components/common/pagination";
 import { UrlFilterBar } from "@/components/common/url-filter-bar";
 import { INTERVIEW_STATUS_LABELS, optionsOf } from "@/config/labels";
-import { INTERVIEW_STATUSES, type InterviewStatus } from "@/domain";
 import { InterviewList } from "@/features/interviews/components/interview-list";
+import {
+  buildInterviewQuery,
+  DEFAULT_INTERVIEW_VIEW,
+  interviewFiltersSchema,
+  INTERVIEW_PAGE_SIZE as PAGE_SIZE,
+  INTERVIEW_VIEWS as VIEWS,
+} from "@/features/interviews/filters";
 import { can } from "@/lib/auth/permissions";
 import { requirePermission } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
 import { getServices } from "@/lib/server/services";
-import type { InterviewQuery } from "@/repositories/types";
 
 export const metadata: Metadata = { title: "Colloqui" };
 
-const VIEWS = { today: "Oggi", upcoming: "Prossimi", past: "Completati e passati" } as const;
 type View = keyof typeof VIEWS;
-const PAGE_SIZE = 30;
-
-const first = (value: unknown) => (Array.isArray(value) ? value[0] : value);
-const filtersSchema = z.object({
-  view: z.preprocess(first, z.enum(["today", "upcoming", "past"]).optional()).catch(undefined),
-  recruiter: z.preprocess(first, z.uuid().optional()).catch(undefined),
-  company: z.preprocess(first, z.uuid().optional()).catch(undefined),
-  status: z.preprocess(first, z.enum(INTERVIEW_STATUSES).optional()).catch(undefined),
-  date: z
-    .preprocess(
-      first,
-      z
-        .string()
-        .regex(/^\d{4}-\d{2}-\d{2}$/)
-        .optional(),
-    )
-    .catch(undefined)
-    .refine((value) => !value || isValid(parseISO(value)))
-    .catch(undefined),
-  page: z.preprocess(first, z.coerce.number().int().min(1).max(500).optional()).catch(undefined),
-});
-
-function buildQuery(view: View, filters: z.infer<typeof filtersSchema>, now: Date): InterviewQuery {
-  const query: InterviewQuery = {
-    recruiterId: filters.recruiter,
-    companyId: filters.company,
-    statuses: filters.status ? [filters.status] : undefined,
-    limit: PAGE_SIZE,
-    offset: ((filters.page ?? 1) - 1) * PAGE_SIZE,
-  };
-  if (filters.date) {
-    const day = parseISO(filters.date);
-    return { ...query, from: startOfDay(day), to: endOfDay(day), order: "asc" };
-  }
-  switch (view) {
-    case "today":
-      return { ...query, from: startOfDay(now), to: endOfDay(now), order: "asc" };
-    case "upcoming":
-      return {
-        ...query,
-        from: now,
-        statuses: query.statuses ?? (["SCHEDULED"] satisfies InterviewStatus[]),
-        order: "asc",
-      };
-    case "past":
-      return { ...query, concludedBy: now, order: "desc" };
-  }
-}
 
 export default async function InterviewsPage({ searchParams }: PageProps<"/interviews">) {
   const user = await requirePermission("interview.read");
   const raw = await searchParams;
-  const filters = filtersSchema.parse(raw);
-  const view: View = filters.view ?? "today";
+  const filters = interviewFiltersSchema.parse(raw);
+  const view: View = filters.view ?? DEFAULT_INTERVIEW_VIEW;
   const services = await getServices();
   const [result, recruiters, companies] = await Promise.all([
-    services.interviews.list(buildQuery(view, filters, new Date())),
+    services.interviews.list(buildInterviewQuery(filters, new Date())),
     services.users.listRecruiters(),
     services.companies.options(),
   ]);
@@ -124,7 +78,7 @@ export default async function InterviewsPage({ searchParams }: PageProps<"/inter
           {
             param: "status",
             label: "Filtra per stato",
-            allLabel: "Tutti gli stati",
+            allLabel: view === "upcoming" && !filters.date ? "Programmati" : "Tutti gli stati",
             options: optionsOf(INTERVIEW_STATUS_LABELS),
           },
           {
@@ -137,6 +91,9 @@ export default async function InterviewsPage({ searchParams }: PageProps<"/inter
       />
       <form className="flex items-center gap-2 text-sm" action="/interviews">
         <input type="hidden" name="view" value={view} />
+        {(["recruiter", "company", "status"] as const).map((key) =>
+          filters[key] ? <input key={key} type="hidden" name={key} value={filters[key]} /> : null,
+        )}
         <label htmlFor="interview-date" className="text-muted-foreground">
           Giorno specifico
         </label>

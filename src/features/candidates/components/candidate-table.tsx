@@ -1,8 +1,9 @@
-import { ChevronRight } from "lucide-react";
+import { Check, ChevronRight, X } from "lucide-react";
 import Link from "next/link";
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { AVAILABILITY_LABELS, labelOf } from "@/config/labels";
+import { AVAILABILITY_LABELS, EVALUATION_RESULT_LABELS, labelOf } from "@/config/labels";
+import type { EvaluationResult } from "@/domain";
 import { StageBadge } from "@/features/recruiting/components/badges";
 import { EMPTY_VALUE, formatDateTime, formatSlot, formatTimeAgo } from "@/lib/format";
 import type { CandidateListItem } from "@/repositories/types";
@@ -10,15 +11,38 @@ import type { CandidateListItem } from "@/repositories/types";
 import { candidateHref } from "../lib/routes";
 import { OriginBadge } from "./origin-badge";
 
+function EvaluationIndicator({ result }: { result: EvaluationResult | null }) {
+  if (result !== "SUITABLE" && result !== "NOT_SUITABLE") return null;
+  const Icon = result === "SUITABLE" ? Check : X;
+  const label = `Esito candidatura: ${EVALUATION_RESULT_LABELS[result]}`;
+
+  return (
+    <span role="img" aria-label={label} title={label} className="shrink-0">
+      <Icon
+        aria-hidden="true"
+        strokeWidth={3}
+        className={
+          result === "SUITABLE"
+            ? "size-4 text-emerald-600 dark:text-emerald-400"
+            : "size-4 text-red-600 dark:text-red-400"
+        }
+      />
+    </span>
+  );
+}
+
 function Stage({ item }: { item: CandidateListItem }) {
   const application = item.latestApplication;
   if (!application) return <span className="text-sm text-muted-foreground">Nessuna candidatura</span>;
   return (
     <div className="space-y-1">
       <StageBadge code={application.stageCode} label={application.stageLabel} />
-      <p className="max-w-56 truncate text-xs text-muted-foreground" title={application.selectionTitle}>
-        {application.selectionTitle}
-      </p>
+      <div className="flex items-center gap-1.5">
+        <p className="max-w-56 truncate text-xs text-muted-foreground" title={application.selectionTitle}>
+          {application.selectionTitle}
+        </p>
+        <EvaluationIndicator result={application.latestEvaluationResult} />
+      </div>
     </div>
   );
 }
@@ -49,10 +73,12 @@ function CandidateCard({ item }: { item: CandidateListItem }) {
             {residenceOf(item) && ` · ${residenceOf(item)}`}
           </p>
         </div>
-        {item.latestApplication && (
-          <StageBadge code={item.latestApplication.stageCode} label={item.latestApplication.stageLabel} />
-        )}
       </div>
+      {item.latestApplication && (
+        <div className="mt-3">
+          <Stage item={item} />
+        </div>
+      )}
       <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
         <div>
           <dt className="text-xs text-muted-foreground">Prossimo colloquio</dt>

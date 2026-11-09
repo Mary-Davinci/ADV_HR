@@ -66,6 +66,7 @@ export interface InterviewRepository {
   getById(id: EntityId): Promise<Interview | null>;
   create(applicationId: EntityId, input: InterviewInput): Promise<Interview>;
   update(id: EntityId, input: InterviewInput): Promise<Interview | null>;
+  delete(id: EntityId): Promise<boolean>;
   count(query: Omit<InterviewQuery, "limit" | "offset" | "order">): Promise<number>;
 }
 

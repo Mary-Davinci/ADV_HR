@@ -1,7 +1,8 @@
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { seedDatabase } from "@/db/seed/seed";
+import { applicationEvaluations, candidates } from "@/db/schema";
 import { createTestDatabase, type TestDatabase } from "@/test/test-database";
 
 const NOW = new Date(2026, 8, 30, 8, 0);
@@ -209,6 +210,7 @@ describe("PostgreSQL repositories", () => {
     const [view] = await testDb.store.applications.list({ candidateId: rizziSearch!.id });
     expect(view?.stage.code).toBe("REJECTED");
     expect(view?.latestEvaluation?.result).toBe("NOT_SUITABLE");
+    expect(rizziSearch?.latestApplication?.latestEvaluationResult).toBe("NOT_SUITABLE");
     expect(view?.latestFeedback?.content).toContain("budget");
     expect(view?.recruiter?.displayName).toBe("Chiara Moretti");
   });
@@ -261,5 +263,65 @@ describe("PostgreSQL repositories", () => {
     expect(await testDb.store.talentPools.addMember(pool!.id, candidate!.id, admin!.id)).toBe(true);
     expect(await testDb.store.talentPools.addMember(pool!.id, candidate!.id, admin!.id)).toBe(false);
     expect(await testDb.store.talentPools.removeMember(pool!.id, candidate!.id)).toBe(true);
+  });
+
+  it("shows the latest evaluation only for the application displayed in the candidate list", async () => {
+    const candidate = await testDb.store.candidates.create({
+      firstName: "Esito",
+      lastName: "CandidaturaTest",
+      fiscalCode: null,
+      email: null,
+      phone: null,
+      birthDate: null,
+      gender: "NOT_SPECIFIED",
+    });
+    try {
+      const selections = (await testDb.store.selections.list({ limit: 2 })).items;
+      const stage = await testDb.store.stages.getByCode("INTERVIEWED");
+      const evaluator = await testDb.store.users.findByEmailWithCredentials("admin@adv-hr.local");
+      const first = await testDb.store.applications.create({
+        candidateId: candidate.id,
+        selectionId: selections[0]!.selection.id,
+        stageId: stage!.id,
+        recruiterId: null,
+        source: "MANUAL",
+      });
+      const displayed = async () =>
+        (await testDb.store.candidates.search({ text: "CandidaturaTest" })).items[0]!.latestApplication;
+      expect((await displayed())?.latestEvaluationResult).toBeNull();
+
+      await testDb.db.insert(applicationEvaluations).values({
+        applicationId: first.id,
+        result: "SUITABLE",
+        evaluatedBy: evaluator!.id,
+        evaluatedAt: NOW,
+      });
+      expect((await displayed())?.latestEvaluationResult).toBe("SUITABLE");
+      await testDb.db.insert(applicationEvaluations).values({
+        applicationId: first.id,
+        result: "NOT_SUITABLE",
+        reason: "Requisiti non soddisfatti",
+        evaluatedBy: evaluator!.id,
+        evaluatedAt: new Date(NOW.getTime() + 1000),
+      });
+      expect((await displayed())?.latestEvaluationResult).toBe("NOT_SUITABLE");
+
+      const second = await testDb.store.applications.create({
+        candidateId: candidate.id,
+        selectionId: selections[1]!.selection.id,
+        stageId: stage!.id,
+        recruiterId: null,
+        source: "MANUAL",
+      });
+      expect(await displayed()).toMatchObject({ id: second.id, latestEvaluationResult: null });
+      await testDb.db.insert(applicationEvaluations).values({
+        applicationId: second.id,
+        result: "TO_REVIEW",
+        evaluatedBy: evaluator!.id,
+      });
+      expect(await displayed()).toMatchObject({ id: second.id, latestEvaluationResult: "TO_REVIEW" });
+    } finally {
+      await testDb.db.delete(candidates).where(eq(candidates.id, candidate.id));
+    }
   });
 });

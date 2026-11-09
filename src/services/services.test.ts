@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { seedDatabase } from "@/db/seed/seed";
 import { DomainRuleError, type RoleCode, type SessionUser } from "@/domain";
 import { ForbiddenError } from "@/lib/auth/permissions";
+import { buildInterviewQuery, interviewFiltersSchema } from "@/features/interviews/filters";
 import { createLoginRateLimiter } from "@/lib/auth/login-rate-limit";
 import { createTestDatabase, type TestDatabase } from "@/test/test-database";
 
@@ -264,6 +265,72 @@ describe("services", () => {
   });
 
   describe("interviews", () => {
+    it("shows newly scheduled interviews on the default agenda, including later days", async () => {
+      const view = await applicationOf("Cattaneo");
+      const service = createInterviewService(ctx(actors.recruiter));
+      const { id } = await service.schedule(view.application.id, {
+        scheduledAt: new Date(NOW.getTime() + 2 * 86_400_000),
+        durationMinutes: 30,
+        type: "HR",
+        status: "SCHEDULED",
+        recruiterId: null,
+        location: "Milano",
+        meetingUrl: null,
+        notes: null,
+      });
+      const agenda = await service.list(buildInterviewQuery(interviewFiltersSchema.parse({}), NOW));
+      expect(agenda.items.map((item) => item.interview.id)).toContain(id);
+      expect(agenda.items.every((item) => item.interview.status === "SCHEDULED")).toBe(true);
+      const today = await service.list(buildInterviewQuery(interviewFiltersSchema.parse({ view: "today" }), NOW));
+      expect(today.items.map((item) => item.interview.id)).not.toContain(id);
+    });
+
+    it("deletes only the selected interview, preserves feedback and records an audit", async () => {
+      const view = await applicationOf("Cattaneo");
+      const service = createInterviewService(ctx(actors.recruiter));
+      const input = {
+        scheduledAt: new Date(NOW.getTime() + 3 * 86_400_000),
+        durationMinutes: 30,
+        type: "HR" as const,
+        status: "SCHEDULED" as const,
+        recruiterId: null,
+        location: "Milano",
+        meetingUrl: null,
+        notes: null,
+      };
+      const { id } = await service.schedule(view.application.id, input);
+      const other = await service.schedule(view.application.id, input);
+      const feedback = await testDb.store.feedbacks.create({
+        applicationId: view.application.id,
+        interviewId: id,
+        authorId: actors.recruiter.id,
+        type: "INTERVIEW",
+        content: "Note da conservare nella candidatura",
+      });
+
+      await expect(createInterviewService(ctx(actors.viewer)).remove(id)).rejects.toBeInstanceOf(ForbiddenError);
+      expect(await testDb.store.interviews.getById(id)).not.toBeNull();
+
+      await service.remove(id);
+
+      expect(await testDb.store.interviews.getById(id)).toBeNull();
+      expect(await testDb.store.interviews.getById(other.id)).not.toBeNull();
+      expect(await testDb.store.applications.getById(view.application.id)).not.toBeNull();
+      expect(await testDb.store.candidates.getById(view.candidate.id)).not.toBeNull();
+      const feedbacks = await testDb.store.feedbacks.list({ applicationId: view.application.id });
+      expect(feedbacks.find((item) => item.id === feedback.id)).toMatchObject({
+        interviewId: null,
+        content: feedback.content,
+      });
+      const agenda = await service.list(buildInterviewQuery(interviewFiltersSchema.parse({}), NOW));
+      expect(agenda.items.map((item) => item.interview.id)).not.toContain(id);
+      const audit = await testDb.store.audit.list({ type: "INTERVIEW", id });
+      expect(audit).toEqual(
+        expect.arrayContaining([expect.objectContaining({ action: "DELETE", actorId: actors.recruiter.id })]),
+      );
+      await expect(service.remove(id)).rejects.toThrow("non esiste più");
+    });
+
     it("records a contact when an interview is completed", async () => {
       const view = await applicationOf("Marchetti");
       const [interview] = (await testDb.store.interviews.list({ applicationId: view.application.id })).items;

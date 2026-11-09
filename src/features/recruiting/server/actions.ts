@@ -82,6 +82,14 @@ export async function updateInterviewAction(input: unknown) {
   );
 }
 
+export async function removeInterviewAction(input: unknown) {
+  return runAction(
+    input,
+    { schema: z.object({ interviewId: uuidSchema }), revalidate: revalidateApp },
+    ({ interviewId }, services) => services.interviews.remove(interviewId),
+  );
+}
+
 export async function removeApplicationAction(input: unknown) {
   return runAction(
     input,

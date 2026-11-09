@@ -8,6 +8,7 @@ import { formatInterviewDay, formatTime } from "@/lib/format";
 import type { InterviewView } from "@/repositories/types";
 
 import { InterviewEditButton } from "./interview-edit-button";
+import { InterviewDeleteButton } from "./interview-delete-button";
 
 function ModeIcon({ view }: { view: InterviewView }) {
   if (view.interview.meetingUrl) return <Video aria-hidden="true" className="size-3.5" />;
@@ -71,14 +72,17 @@ export function InterviewList({
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 sm:shrink-0">
+          <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
             <InterviewStatusBadge status={view.interview.status} />
             {canManage && (
-              <InterviewEditButton
-                interview={view.interview}
-                candidateName={view.candidate.fullName}
-                recruiters={recruiters}
-              />
+              <>
+                <InterviewEditButton
+                  interview={view.interview}
+                  candidateName={view.candidate.fullName}
+                  recruiters={recruiters}
+                />
+                <InterviewDeleteButton interviewId={view.interview.id} candidateName={view.candidate.fullName} />
+              </>
             )}
           </div>
         </li>

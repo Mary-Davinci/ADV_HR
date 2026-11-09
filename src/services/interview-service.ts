@@ -47,6 +47,25 @@ export function createInterviewService(context: ServiceContext) {
       });
     },
 
+    async remove(id: EntityId): Promise<void> {
+      assertCan(actor, "interview.manage");
+      await store.transaction(async (repos) => {
+        const before = await repos.interviews.getById(id);
+        if (!before) throw new NotFoundError("Il colloquio non esiste più.");
+        const removed = await repos.interviews.delete(id);
+        if (!removed) throw new NotFoundError("Il colloquio non esiste più.");
+        await repos.applications.touch(before.applicationId);
+        await recordEvent(repos, actor, {
+          audit: {
+            entityType: "INTERVIEW",
+            entityId: id,
+            action: "DELETE",
+            changes: { applicationId: before.applicationId, status: before.status },
+          },
+        });
+      });
+    },
+
     async update(id: EntityId, input: InterviewInput): Promise<void> {
       assertCan(actor, "interview.manage");
       await store.transaction(async (repos) => {

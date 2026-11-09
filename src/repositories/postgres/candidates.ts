@@ -3,6 +3,7 @@ import { and, asc, desc, eq, inArray, isNotNull, isNull, or, sql, type SQL } fro
 import {
   activePolicyParticipations,
   activities,
+  applicationEvaluations,
   applications,
   candidateCertifications,
   candidateDrivingLicenses,
@@ -36,6 +37,7 @@ import {
   type CandidateTrackingInput,
   type EducationLevel,
   type EntityId,
+  type EvaluationResult,
   type Page,
   type Skill,
 } from "@/domain";
@@ -472,6 +474,11 @@ export class PostgresCandidateRepository implements CandidateRepository {
         stageLabel: recruitingStages.label,
         selectionTitle: recruitmentSelections.title,
         companyName: companies.name,
+        latestEvaluationResult: sql<EvaluationResult | null>`(
+          SELECT e.result FROM ${applicationEvaluations} e
+          WHERE e.application_id = ${applications.id}
+          ORDER BY e.evaluated_at DESC LIMIT 1
+        )`,
         recruiterId: users.id,
         recruiterName: users.displayName,
       })
@@ -492,6 +499,7 @@ export class PostgresCandidateRepository implements CandidateRepository {
           stageLabel: row.stageLabel,
           selectionTitle: row.selectionTitle,
           companyName: row.companyName,
+          latestEvaluationResult: row.latestEvaluationResult,
           recruiter:
             row.recruiterId && row.recruiterName ? { id: row.recruiterId, displayName: row.recruiterName } : null,
         },

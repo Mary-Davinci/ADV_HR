@@ -144,6 +144,11 @@ export class PostgresInterviewRepository implements InterviewRepository {
     return row ?? null;
   }
 
+  async delete(id: EntityId): Promise<boolean> {
+    const rows = await this.db.delete(interviews).where(eq(interviews.id, id)).returning({ id: interviews.id });
+    return rows.length > 0;
+  }
+
   async count(query: Omit<InterviewQuery, "limit" | "offset" | "order">): Promise<number> {
     const [row] = await this.db
       .select({ count: sql<number>`count(*)::int` })
