@@ -88,6 +88,7 @@ export function DocumentsPanel({
             <FilterSelect
               label="Tipo di documento"
               allLabel="Tipo di documento…"
+              className="sm:min-w-64"
               value={type}
               options={optionsOf(DOCUMENT_TYPE_LABELS).filter((option) => allowedTypes.includes(option.value))}
               onChange={(value) => setType(value as DocumentType | undefined)}

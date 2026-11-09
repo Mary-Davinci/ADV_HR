@@ -6,6 +6,7 @@ import {
   ACTIVE_POLICY_PROGRAM_LABELS,
   AVAILABILITY_LABELS,
   CANDIDATE_ORIGIN_LABELS,
+  DRIVING_LICENSE_LABELS,
   EMPLOYMENT_STATUS_LABELS,
   FEEDBACK_TYPE_LABELS,
   GENDER_LABELS,
@@ -74,6 +75,9 @@ export function OverviewPanel({
   const { candidate } = profile;
   const next = profile.nextInterview;
   const lastInterview = profile.lastCompletedInterview;
+  const licenses = profile.drivingLicenses
+    .filter((license) => license.valid)
+    .map((license) => DRIVING_LICENSE_LABELS[license.category]);
   const age = getAge(candidate.birthDate);
   const totalMonths = getTotalExperienceMonths(profile.experiences);
   const latestFeedbacks = profile.feedbacks.slice(0, 3);
@@ -220,6 +224,34 @@ export function OverviewPanel({
                 </span>
               </DetailField>
             )}
+            {profile.documents.some((document) => document.type === "INTERVIEW_EVALUATION") && (
+              <DetailField label="Schede di valutazione colloquio">
+                <DocumentLinks documents={profile.documents} type="INTERVIEW_EVALUATION" />
+              </DetailField>
+            )}
+            <DetailField label="Patente e patentini">
+              {licenses.length > 0 ? licenses.join(", ") : "Nessuna indicata"}
+            </DetailField>
+            <DetailField label="Licenze e certificazioni professionali">
+              {profile.certifications.length > 0 ? (
+                <span className="block space-y-0.5">
+                  {profile.certifications.map((certification) => (
+                    <span key={certification.id} className="block">
+                      {certification.name}
+                      {certification.expiresAt && (
+                        <span className="text-xs text-muted-foreground">
+                          {" "}
+                          · scade il {formatDate(certification.expiresAt)}
+                        </span>
+                      )}
+                    </span>
+                  ))}
+                </span>
+              ) : (
+                !profile.documents.some((document) => document.type === "CERTIFICATION") && "Nessuna indicata"
+              )}
+              <DocumentLinks documents={profile.documents} type="CERTIFICATION" />
+            </DetailField>
             <DetailField label="Candidature attive">
               {String(profile.applications.filter((view) => !view.stage.isTerminal).length)}
             </DetailField>

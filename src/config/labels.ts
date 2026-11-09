@@ -225,6 +225,7 @@ export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   JOB_DESCRIPTION: "Job description",
   SKILLS_ASSESSMENT: "Bilancio delle competenze",
   ORIENTATION: "Orientamento",
+  INTERVIEW_EVALUATION: "Scheda di valutazione colloquio",
   CONTRACT: "Contratto",
   OTHER: "Altro",
 };

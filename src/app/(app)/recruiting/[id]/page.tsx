@@ -182,7 +182,7 @@ export default async function CandidatePage({ params, searchParams }: PageProps<
         <DocumentsPanel
           owner={{ candidateId: id }}
           documents={profile.documents}
-          allowedTypes={["CV", "COVER_LETTER", "CERTIFICATION", "IDENTITY_DOCUMENT", "OTHER"]}
+          allowedTypes={["CV", "COVER_LETTER", "CERTIFICATION", "INTERVIEW_EVALUATION", "IDENTITY_DOCUMENT", "OTHER"]}
           canManage={can(user, "document.manage")}
         />
       ),
