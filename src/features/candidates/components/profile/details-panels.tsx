@@ -7,6 +7,7 @@ import {
   GENDER_LABELS,
   labelOf,
   PROTECTED_CATEGORY_LABELS,
+  RESIDENCE_PERMIT_STATUS_LABELS,
   WORK_MODE_LABELS,
   WORK_TIME_LABELS,
 } from "@/config/labels";
@@ -37,6 +38,14 @@ export function ProfilePanel({ profile, canEdit }: { profile: CandidateProfileVi
           <DetailField label="Email">{candidate.email}</DetailField>
           <DetailField label="Telefono">{candidate.phone}</DetailField>
           <DetailField label="Genere">{labelOf(GENDER_LABELS, candidate.gender)}</DetailField>
+          <DetailField label="Nazionalità">{candidate.nationality}</DetailField>
+          <DetailField label="Permesso di soggiorno">
+            {labelOf(RESIDENCE_PERMIT_STATUS_LABELS, candidate.residencePermitStatus, "")}
+          </DetailField>
+          <DetailField label="Scadenza del permesso">
+            {candidate.residencePermitExpiresOn && formatDate(candidate.residencePermitExpiresOn)}
+          </DetailField>
+          <DetailField label="Motivo o note sul permesso">{candidate.residencePermitNotes}</DetailField>
           <DetailField label="Inserito il">{formatDateTime(candidate.createdAt)}</DetailField>
         </DetailList>
       </DetailSection>

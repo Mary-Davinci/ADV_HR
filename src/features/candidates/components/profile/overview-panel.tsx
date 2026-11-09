@@ -13,9 +13,11 @@ import {
   INTERVIEW_TYPE_LABELS,
   labelOf,
   PROTECTED_CATEGORY_LABELS,
+  RESIDENCE_PERMIT_STATUS_LABELS,
 } from "@/config/labels";
 import { getTotalExperienceMonths, type DocumentMetadata, type DocumentType } from "@/domain";
-import { formatDate, formatDateTime, formatLongDate, formatMonths, formatTime, getAge } from "@/lib/format";
+import { daysUntil, formatDate, formatDateTime, formatLongDate, formatMonths, formatTime, getAge } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import type { CandidateProfileView } from "@/services/candidate-service";
 
 import { OriginBadge } from "../origin-badge";
@@ -79,6 +81,7 @@ export function OverviewPanel({
     .filter((license) => license.valid)
     .map((license) => DRIVING_LICENSE_LABELS[license.category]);
   const age = getAge(candidate.birthDate);
+  const permitDays = daysUntil(candidate.residencePermitExpiresOn);
   const totalMonths = getTotalExperienceMonths(profile.experiences);
   const latestFeedbacks = profile.feedbacks.slice(0, 3);
 
@@ -156,6 +159,30 @@ export function OverviewPanel({
               {labelOf(EMPLOYMENT_STATUS_LABELS, profile.profile.employmentStatus)}
             </DetailField>
             <DetailField label="Genere">{labelOf(GENDER_LABELS, candidate.gender)}</DetailField>
+            <DetailField label="Nazionalità">{candidate.nationality}</DetailField>
+            <DetailField label="Permesso di soggiorno">
+              {labelOf(RESIDENCE_PERMIT_STATUS_LABELS, candidate.residencePermitStatus, "")}
+              {candidate.residencePermitExpiresOn && (
+                <span
+                  className={cn(
+                    "block text-xs",
+                    permitDays !== null && permitDays < 0
+                      ? "font-medium text-destructive"
+                      : permitDays !== null && permitDays <= 60
+                        ? "font-medium text-amber-700 dark:text-amber-400"
+                        : "text-muted-foreground",
+                  )}
+                >
+                  {permitDays !== null && permitDays < 0 ? "Scaduto il " : "Scade il "}
+                  {formatDate(candidate.residencePermitExpiresOn)}
+                </span>
+              )}
+              {candidate.residencePermitNotes && (
+                <span className="block text-xs whitespace-pre-line text-muted-foreground">
+                  {candidate.residencePermitNotes}
+                </span>
+              )}
+            </DetailField>
           </DetailList>
         </DetailSection>
 

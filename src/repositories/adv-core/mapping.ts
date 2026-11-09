@@ -17,7 +17,7 @@ import {
 import type { AdvCoreCandidate, AdvCoreCompany } from "./client";
 
 /** Da incrementare quando cambia il mapping: forza la rielaborazione di tutti i record. */
-export const MAPPING_VERSION = 5;
+export const MAPPING_VERSION = 6;
 
 export type FieldValue = string | number | boolean | null;
 /** Campi piatti "tabella.campo" (es. "candidate.email", "profile.residenceCity"). */
@@ -267,6 +267,7 @@ export function mapCandidate(row: AdvCoreCandidate, today: Date): MappedCandidat
     "candidate.phone": cleanText(row.cellulare ?? row.telefono ?? row.telefono_2, 40),
     "candidate.birthDate": normalizeDate(row.nato_il, today),
     "candidate.gender": mapGender(row.sesso),
+    "candidate.nationality": titleCase(declared(cleanText(row.nazionalita, 60))),
     "profile.residenceAddress": cleanText(row.indirizzo, 200),
     "profile.residencePostalCode": normalizePostalCode(row.cap),
     "profile.residenceCity": cleanText(row.comune, 100),

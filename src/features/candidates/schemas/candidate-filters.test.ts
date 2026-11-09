@@ -128,8 +128,21 @@ describe("candidate form schemas", () => {
       phone: "",
       birthDate: "1994-03-12",
       gender: "FEMALE",
+      nationality: " Ucraina ",
+      residencePermitStatus: "PENDING",
+      residencePermitExpiresOn: "2027-03-31",
+      residencePermitNotes: "",
     });
-    expect(parsed).toMatchObject({ firstName: "Martina", fiscalCode: "GLLMTN94C52X000A", email: null, phone: null });
+    expect(parsed).toMatchObject({
+      firstName: "Martina",
+      fiscalCode: "GLLMTN94C52X000A",
+      email: null,
+      phone: null,
+      nationality: "Ucraina",
+      residencePermitStatus: "PENDING",
+      residencePermitExpiresOn: "2027-03-31",
+      residencePermitNotes: null,
+    });
 
     const invalid = identitySchema.safeParse({
       firstName: "A",
@@ -139,6 +152,10 @@ describe("candidate form schemas", () => {
       phone: "",
       birthDate: "",
       gender: "MALE",
+      nationality: "",
+      residencePermitStatus: "",
+      residencePermitExpiresOn: "",
+      residencePermitNotes: "",
     });
     expect(invalid.error?.issues[0]?.message).toBe("Codice fiscale non valido");
   });

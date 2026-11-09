@@ -26,6 +26,7 @@ import {
   educationLevelEnum,
   employmentStatusEnum,
   genderEnum,
+  residencePermitStatusEnum,
   languageLevelEnum,
   protectedCategoryEnum,
   skillCategoryEnum,
@@ -51,6 +52,10 @@ export const candidates = pgTable(
     phone: varchar("phone", { length: 40 }),
     birthDate: date("birth_date", { mode: "string" }),
     gender: genderEnum("gender").notNull().default("NOT_SPECIFIED"),
+    nationality: varchar("nationality", { length: 60 }),
+    residencePermitStatus: residencePermitStatusEnum("residence_permit_status"),
+    residencePermitExpiresOn: date("residence_permit_expires_on", { mode: "string" }),
+    residencePermitNotes: text("residence_permit_notes"),
     /** Da dove arriva il candidato; quelli importati da ADV CORE sono `ADV_CORE`. */
     origin: candidateOriginEnum("origin").notNull().default("MANUAL"),
     /** Percorso di orientamento completato (data); null = non completato. */

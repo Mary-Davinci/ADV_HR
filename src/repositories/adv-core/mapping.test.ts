@@ -98,6 +98,14 @@ describe("normalizzazione ADV Core", () => {
     });
   });
 
+  it("nazionalità: leggibile, risposte vuote scartate", () => {
+    const nationality = (value: string | null) =>
+      mapCandidate({ nazionalita: value } as AdvCoreCandidate, TODAY).fields["candidate.nationality"];
+    expect(nationality("ITALIANA")).toBe("Italiana");
+    expect(nationality("NO")).toBeNull();
+    expect(nationality(null)).toBeNull();
+  });
+
   it("regioni in formato leggibile", () => {
     expect(titleCase("BASILICATA")).toBe("Basilicata");
     expect(titleCase("EMILIA-ROMAGNA")).toBe("Emilia-Romagna");

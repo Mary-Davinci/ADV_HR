@@ -19,6 +19,7 @@ import type {
   EmploymentStatus,
   EntityId,
   Gender,
+  ResidencePermitStatus,
   ISODate,
   Page,
   PageRequest,
@@ -134,6 +135,11 @@ export interface CandidateIdentityInput {
   phone: string | null;
   birthDate: ISODate | null;
   gender: Gender;
+  /** Facoltativi: chi non li indica (es. candidatura dal sito) lascia i valori attuali. */
+  nationality?: string | null;
+  residencePermitStatus?: ResidencePermitStatus | null;
+  residencePermitExpiresOn?: ISODate | null;
+  residencePermitNotes?: string | null;
 }
 
 export type CandidateProfileInput = Omit<CandidateProfile, "candidateId" | "lastReviewedAt" | "updatedAt">;

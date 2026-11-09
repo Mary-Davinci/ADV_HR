@@ -10,6 +10,7 @@ import {
   EDUCATION_LEVELS,
   EMPLOYMENT_STATUSES,
   GENDERS,
+  RESIDENCE_PERMIT_STATUSES,
   LANGUAGE_LEVELS,
   PROTECTED_CATEGORIES,
   SKILL_CATEGORIES,
@@ -49,6 +50,10 @@ export const identitySchema = z.object({
     "Data di nascita non valida",
   ),
   gender: z.enum(GENDERS),
+  nationality: optionalText(60),
+  residencePermitStatus: optionalEnum(RESIDENCE_PERMIT_STATUSES),
+  residencePermitExpiresOn: optionalDate,
+  residencePermitNotes: optionalText(500),
 });
 
 /** Origine, orientamento e politiche attivabili (sezione "Percorso"). */

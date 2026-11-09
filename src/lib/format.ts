@@ -1,4 +1,5 @@
 import {
+  differenceInCalendarDays,
   differenceInYears,
   format,
   formatDistanceToNowStrict,
@@ -75,6 +76,12 @@ export function formatTimeAgo(value: DateInput): string {
 
 export function getAge(birthDate: ISODate | null, now: Date = new Date()): number | null {
   return birthDate ? differenceInYears(now, parseISO(birthDate)) : null;
+}
+
+/** Giorni di calendario da oggi alla data indicata (negativi se già passata). */
+export function daysUntil(value: ISODate | null, now: Date = new Date()): number | null {
+  if (!value) return null;
+  return differenceInCalendarDays(parseISO(value), now);
 }
 
 export function formatMonths(months: number): string {

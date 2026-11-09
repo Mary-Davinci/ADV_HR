@@ -118,6 +118,10 @@ export function EditIdentityButton({ candidate, label }: { candidate: Candidate;
     phone: toFormValue(candidate.phone),
     birthDate: toFormValue(candidate.birthDate),
     gender: candidate.gender,
+    nationality: toFormValue(candidate.nationality),
+    residencePermitStatus: candidate.residencePermitStatus ?? "",
+    residencePermitExpiresOn: toFormValue(candidate.residencePermitExpiresOn),
+    residencePermitNotes: toFormValue(candidate.residencePermitNotes),
   };
   return (
     <EditSectionButton

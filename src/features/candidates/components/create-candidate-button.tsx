@@ -24,6 +24,10 @@ const EMPTY: IdentityFormInput = {
   phone: "",
   birthDate: "",
   gender: "NOT_SPECIFIED",
+  nationality: "",
+  residencePermitStatus: "",
+  residencePermitExpiresOn: "",
+  residencePermitNotes: "",
 };
 
 /** Creazione rapida: solo anagrafica essenziale, il resto si completa nella scheda. */

@@ -85,6 +85,10 @@ export type ActivePolicyProgram = (typeof ACTIVE_POLICY_PROGRAMS)[number];
 export const ACTIVE_POLICY_STATUSES = ["ACTIVE", "COMPLETED", "INTERRUPTED"] as const;
 export type ActivePolicyStatus = (typeof ACTIVE_POLICY_STATUSES)[number];
 
+/** Permesso di soggiorno: non necessario per cittadini italiani e UE. */
+export const RESIDENCE_PERMIT_STATUSES = ["NOT_REQUIRED", "VALID", "REQUESTED", "PENDING", "EXPIRED", "NONE"] as const;
+export type ResidencePermitStatus = (typeof RESIDENCE_PERMIT_STATUSES)[number];
+
 /** Da dove arriva il candidato: importato da ADV CORE, dalle piattaforme di annunci o inserito a mano. */
 export const CANDIDATE_ORIGINS = ["ADV_CORE", "INDEED", "LINKEDIN", "MANUAL", "WEBSITE"] as const;
 export type CandidateOrigin = (typeof CANDIDATE_ORIGINS)[number];
@@ -103,6 +107,11 @@ export interface Candidate extends AuditInfo {
   phone: string | null;
   birthDate: ISODate | null;
   gender: Gender;
+  nationality: string | null;
+  residencePermitStatus: ResidencePermitStatus | null;
+  residencePermitExpiresOn: ISODate | null;
+  /** Motivo se il permesso manca o è negato, oppure altre note utili alla selezione. */
+  residencePermitNotes: string | null;
   origin: CandidateOrigin;
   /** Data in cui ha completato il percorso di orientamento; null = non completato. */
   orientationCompletedOn: ISODate | null;

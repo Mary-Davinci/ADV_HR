@@ -10,6 +10,7 @@ import type {
   DocumentType,
   DrivingLicenseCategory,
   EducationLevel,
+  ResidencePermitStatus,
   EmploymentStatus,
   EvaluationResult,
   ExperienceLevel,
@@ -39,6 +40,15 @@ import type {
  * Label italiane centralizzate. L'interfaccia non mostra MAI i valori
  * tecnici degli enum: usa sempre queste mappe (o `labelOf`).
  */
+
+export const RESIDENCE_PERMIT_STATUS_LABELS: Record<ResidencePermitStatus, string> = {
+  NOT_REQUIRED: "Non necessario (cittadino italiano o UE)",
+  VALID: "Sì, in corso di validità",
+  REQUESTED: "Richiesto",
+  PENDING: "In attesa di rilascio o rinnovo",
+  EXPIRED: "Scaduto",
+  NONE: "No",
+};
 
 export const GENDER_LABELS: Record<Gender, string> = {
   FEMALE: "Donna",

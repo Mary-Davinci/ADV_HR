@@ -1,7 +1,7 @@
 "use client";
 
-import { FieldRow, SelectField, TextField } from "@/components/forms/fields";
-import { GENDER_LABELS, optionsOf } from "@/config/labels";
+import { FieldRow, SelectField, TextareaField, TextField } from "@/components/forms/fields";
+import { GENDER_LABELS, optionsOf, RESIDENCE_PERMIT_STATUS_LABELS } from "@/config/labels";
 
 import type { IdentityFormInput } from "./form-types";
 
@@ -26,12 +26,24 @@ export function IdentityFields() {
         <TextField<IdentityFormInput> name="email" label="Email" type="email" maxLength={254} />
         <TextField<IdentityFormInput> name="phone" label="Telefono" type="tel" maxLength={40} />
       </FieldRow>
-      <SelectField<IdentityFormInput>
-        name="gender"
-        label="Genere"
-        required
-        options={optionsOf(GENDER_LABELS)}
-        className="sm:max-w-xs"
+      <FieldRow>
+        <SelectField<IdentityFormInput> name="gender" label="Genere" required options={optionsOf(GENDER_LABELS)} />
+        <TextField<IdentityFormInput> name="nationality" label="Nazionalità" maxLength={60} />
+      </FieldRow>
+      <FieldRow>
+        <SelectField<IdentityFormInput>
+          name="residencePermitStatus"
+          label="Permesso di soggiorno"
+          options={optionsOf(RESIDENCE_PERMIT_STATUS_LABELS)}
+        />
+        <TextField<IdentityFormInput> name="residencePermitExpiresOn" label="Scadenza del permesso" type="date" />
+      </FieldRow>
+      <TextareaField<IdentityFormInput>
+        name="residencePermitNotes"
+        label="Motivo o note sul permesso"
+        description="Ad esempio il motivo se il permesso manca o è stato negato."
+        rows={2}
+        maxLength={500}
       />
     </>
   );
