@@ -1,16 +1,17 @@
-import { ArrowLeft, Clock, History, PhoneCall } from "lucide-react";
+import { ArrowLeft, Pencil } from "lucide-react";
 import type { Metadata } from "next";
+import { Cormorant_Garamond } from "next/font/google";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
 import { ButtonLink } from "@/components/common/button-link";
 import { Timeline } from "@/components/common/timeline";
 import { UrlTabs } from "@/components/common/url-tabs";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { CollectionEditor } from "@/features/candidates/components/collection-editor";
 import { LogContactButton } from "@/features/candidates/components/log-contact-button";
 import { ApplicationsPanel } from "@/features/candidates/components/profile/applications-panel";
+import { CandidateAlerts, CandidateSummary } from "@/features/candidates/components/profile/candidate-summary";
 import { PreferencesPanel } from "@/features/candidates/components/profile/details-panels";
 import { OverviewPanel } from "@/features/candidates/components/profile/overview-panel";
 import {
@@ -19,15 +20,25 @@ import {
 } from "@/features/candidates/components/profile/recommended-selections";
 import { DocumentsPanel } from "@/features/documents/components/documents-panel";
 import { AddToSelectionButton } from "@/features/recruiting/components/add-application-buttons";
-import { StageBadge } from "@/features/recruiting/components/badges";
 import { FEATURES } from "@/config/features";
 import { PoolMembership } from "@/features/talent-pools/components/pool-membership";
 import { can } from "@/lib/auth/permissions";
 import { requirePermission } from "@/lib/auth/session";
-import { formatDateTime, formatTimeAgo, getInitials } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
 import { getServices } from "@/lib/server/services";
+import { cn } from "@/lib/utils";
 import { uuidSchema } from "@/lib/zod-helpers";
 import { getCareers } from "@/lib/server/careers";
+
+/** Stesso carattere con grazie del login: nome del candidato e titoli delle sezioni. */
+const display = Cormorant_Garamond({ subsets: ["latin"], weight: ["500", "600"], variable: "--font-display" });
+
+/** Tema avorio e oro solo in questa pagina; in modalità scura restano i colori del gestionale. */
+const IVORY_THEME = [
+  "[&_[data-slot=card]]:border-[#e3d4b2] [&_[data-slot=card]]:bg-[#fffdf8]",
+  "dark:[&_[data-slot=card]]:border-border dark:[&_[data-slot=card]]:bg-card",
+  "[&_[data-slot=card-header]_h2]:font-(family-name:--font-display) [&_[data-slot=card-header]_h2]:text-xl [&_[data-slot=card-header]_h2]:font-semibold",
+].join(" ");
 
 async function loadProfile(id: string) {
   if (!uuidSchema.safeParse(id).success) return null;
@@ -61,7 +72,6 @@ export default async function CandidatePage({ params, searchParams }: PageProps<
     feedback: can(user, "feedback.manage"),
     interview: can(user, "interview.manage"),
   };
-  const latest = profile.applications[0];
   const activeTab =
     typeof tab === "string"
       ? tab === "interviews"
@@ -106,7 +116,7 @@ export default async function CandidatePage({ params, searchParams }: PageProps<
     {
       value: "overview",
       label: "Panoramica",
-      content: <OverviewPanel profile={profile} canEdit={canEdit} recruiters={recruiters} />,
+      content: <OverviewPanel profile={profile} canEdit={canEdit} />,
     },
     {
       value: "education",
@@ -183,73 +193,54 @@ export default async function CandidatePage({ params, searchParams }: PageProps<
   ];
 
   return (
-    <div className="space-y-6">
+    <div className={cn(display.variable, IVORY_THEME, "space-y-6")}>
       <ButtonLink variant="ghost" size="sm" className="-ml-2 text-muted-foreground" href="/recruiting">
         <ArrowLeft aria-hidden="true" />
         Torna ai candidati
       </ButtonLink>
 
-      <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex min-w-0 items-start gap-4">
-          <Avatar className="size-12">
-            <AvatarFallback className="bg-primary/10 text-base font-medium text-primary">
-              {getInitials(profile.fullName)}
-            </AvatarFallback>
-          </Avatar>
-          <div className="min-w-0 space-y-2">
-            <h1 className="text-2xl font-semibold tracking-tight">
-              <span className="sr-only">Scheda candidato: </span>
-              {profile.candidate.firstName} {profile.candidate.lastName}
-            </h1>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-muted-foreground">
-              {latest ? (
-                <span className="flex max-w-full min-w-0 items-center gap-2">
-                  <StageBadge code={latest.stage.code} label={latest.stage.label} />
-                  <span className="max-w-64 min-w-0 truncate">{latest.selection.title}</span>
-                </span>
-              ) : (
-                <span>Nessuna candidatura attiva</span>
+      <div className="grid items-start gap-6 lg:grid-cols-[22rem_minmax(0,1fr)]">
+        <CandidateSummary
+          profile={profile}
+          canEdit={canEdit}
+          recruiters={recruiters}
+          actions={
+            <>
+              {permissions.manage && (
+                <AddToSelectionButton
+                  variant="default"
+                  candidateId={id}
+                  selections={selectionOptions}
+                  recruiters={recruiters}
+                  excludeSelectionIds={profile.applications.map((view) => view.selection.id)}
+                />
               )}
-              <span
-                className="flex items-center gap-1.5"
-                title={profile.lastContactAt ? formatDateTime(profile.lastContactAt) : undefined}
-              >
-                <PhoneCall aria-hidden="true" className="size-3.5" />
-                Ultimo contatto: {profile.lastContactAt ? formatTimeAgo(profile.lastContactAt) : "nessuno"}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <History aria-hidden="true" className="size-3.5" />
-                Ultima revisione:{" "}
-                {profile.profile.lastReviewedAt ? formatTimeAgo(profile.profile.lastReviewedAt) : "mai"}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Clock aria-hidden="true" className="size-3.5" />
-                Aggiornato {formatTimeAgo(profile.candidate.updatedAt)}
-              </span>
-            </div>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {canEdit && (
-            <LogContactButton
-              candidateId={id}
-              applications={profile.applications
-                .filter((view) => !view.stage.isTerminal)
-                .map((view) => ({ id: view.application.id, label: `${view.selection.title} — ${view.company.name}` }))}
-            />
-          )}
-          {permissions.manage && (
-            <AddToSelectionButton
-              candidateId={id}
-              selections={selectionOptions}
-              recruiters={recruiters}
-              excludeSelectionIds={profile.applications.map((view) => view.selection.id)}
-            />
-          )}
-        </div>
-      </header>
+              {canEdit && (
+                <LogContactButton
+                  candidateId={id}
+                  applications={profile.applications
+                    .filter((view) => !view.stage.isTerminal)
+                    .map((view) => ({
+                      id: view.application.id,
+                      label: `${view.selection.title} — ${view.company.name}`,
+                    }))}
+                />
+              )}
+              {canEdit && (
+                <ButtonLink variant="outline" href={`/recruiting/${id}?tab=overview#section-dati-personali`}>
+                  <Pencil aria-hidden="true" />
+                  Modifica dati
+                </ButtonLink>
+              )}
+            </>
+          }
+        />
 
-      <UrlTabs key={activeTab} label="Sezioni della scheda candidato" tabs={tabs} defaultValue={activeTab} />
+        <div className="min-w-0 space-y-4">
+          <CandidateAlerts profile={profile} />
+          <UrlTabs key={activeTab} label="Sezioni della scheda candidato" tabs={tabs} defaultValue={activeTab} />
+        </div>
+      </div>
     </div>
   );
 }

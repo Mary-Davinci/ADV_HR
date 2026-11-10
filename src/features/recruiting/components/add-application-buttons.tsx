@@ -35,11 +35,14 @@ export function AddToSelectionButton({
   selections,
   recruiters,
   excludeSelectionIds,
+  variant = "outline",
 }: {
   candidateId: string;
   selections: Array<{ id: string; title: string; companyName: string }>;
   recruiters: Recruiter[];
   excludeSelectionIds: string[];
+  /** "default" quando è l'azione principale della pagina. */
+  variant?: "outline" | "default";
 }) {
   const [open, setOpen] = useState(false);
   const available = selections.filter((selection) => !excludeSelectionIds.includes(selection.id));
@@ -61,7 +64,7 @@ export function AddToSelectionButton({
   return (
     <>
       <Button
-        variant="outline"
+        variant={variant}
         onClick={() => {
           form.reset(defaults);
           setOpen(true);

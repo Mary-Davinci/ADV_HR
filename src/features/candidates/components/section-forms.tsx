@@ -63,6 +63,8 @@ interface EditSectionProps<TSchema extends z.ZodType<unknown, FieldValues>> {
   action: (input: { candidateId: string; values: z.input<TSchema> }) => Promise<ActionResult<void>>;
   /** Testo del pulsante, se la sezione ne mostra più di uno. */
   label?: string;
+  /** Solo icona: il titolo diventa l'etichetta accessibile. */
+  compact?: boolean;
   children: React.ReactNode;
 }
 
@@ -74,6 +76,7 @@ function EditSectionButton<TSchema extends z.ZodType<unknown, FieldValues>>({
   initialValues,
   action,
   label = "Modifica",
+  compact = false,
   children,
 }: EditSectionProps<TSchema>) {
   const [open, setOpen] = useState(false);
@@ -83,15 +86,17 @@ function EditSectionButton<TSchema extends z.ZodType<unknown, FieldValues>>({
   return (
     <>
       <Button
-        variant="outline"
-        size="sm"
+        variant={compact ? "ghost" : "outline"}
+        size={compact ? "icon-xs" : "sm"}
+        aria-label={compact ? title : undefined}
+        title={compact ? title : undefined}
         onClick={() => {
           form.reset(initialValues as never);
           setOpen(true);
         }}
       >
         <Pencil aria-hidden="true" />
-        {label}
+        {!compact && label}
       </Button>
       <FormDialog
         open={open}
@@ -140,13 +145,17 @@ export function EditIdentityButton({ candidate, label }: { candidate: Candidate;
 export function EditRecruiterButton({
   candidate,
   recruiters,
+  compact,
 }: {
   candidate: Candidate;
   recruiters: Array<{ id: string; displayName: string }>;
+  /** Solo icona, per l'uso accanto al nome del recruiter. */
+  compact?: boolean;
 }) {
   return (
     <EditSectionButton
       candidateId={candidate.id}
+      compact={compact}
       title="Recruiter di riferimento"
       description="Il recruiter a cui appartiene il candidato, anche se non è ancora in una selezione."
       schema={recruiterSchema}
