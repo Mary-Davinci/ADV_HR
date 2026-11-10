@@ -280,11 +280,11 @@ describe("services", () => {
         meetingUrl: null,
         notes: null,
       });
-      const agenda = await service.list(buildInterviewQuery(interviewFiltersSchema.parse({}), NOW));
+      const agenda = await service.list(buildInterviewQuery(interviewFiltersSchema.parse({})));
       expect(agenda.items.map((item) => item.interview.id)).toContain(id);
       expect(agenda.items.every((item) => item.interview.status === "SCHEDULED")).toBe(true);
-      const today = await service.list(buildInterviewQuery(interviewFiltersSchema.parse({ view: "today" }), NOW));
-      expect(today.items.map((item) => item.interview.id)).not.toContain(id);
+      const done = await service.list(buildInterviewQuery(interviewFiltersSchema.parse({ view: "done" })));
+      expect(done.items.map((item) => item.interview.id)).not.toContain(id);
     });
 
     it("deletes only the selected interview, preserves feedback and records an audit", async () => {
@@ -324,7 +324,7 @@ describe("services", () => {
         interviewId: null,
         content: feedback.content,
       });
-      const agenda = await service.list(buildInterviewQuery(interviewFiltersSchema.parse({}), NOW));
+      const agenda = await service.list(buildInterviewQuery(interviewFiltersSchema.parse({})));
       expect(agenda.items.map((item) => item.interview.id)).not.toContain(id);
       const audit = await testDb.store.audit.list({ type: "INTERVIEW", id });
       expect(audit).toEqual(
@@ -477,6 +477,19 @@ describe("services", () => {
           }),
         ]),
       );
+    });
+
+    it("lists concluded interviews with their outcome and finds them by candidate name", async () => {
+      const view = await applicationOf("Serra");
+      const service = createInterviewService(ctx(actors.admin));
+      const { id } = await service.recordCompleted(view.candidate.id, view.application.id, report());
+      const done = await service.list(
+        buildInterviewQuery(interviewFiltersSchema.parse({ view: "done", q: "serra" })),
+      );
+      expect(done.items.find((item) => item.interview.id === id)).toMatchObject({ outcome: "SUITABLE" });
+      expect(done.items.every((item) => item.candidate.fullName.toLowerCase().includes("serra"))).toBe(true);
+      const todo = await service.list(buildInterviewQuery(interviewFiltersSchema.parse({ q: "serra" })));
+      expect(todo.items.map((item) => item.interview.id)).not.toContain(id);
     });
 
     it("records the actual interview, author, report and linked outcome in the correct candidate history", async () => {

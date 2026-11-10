@@ -23,6 +23,7 @@ import {
   type DocumentMetadata,
   type DocumentProcessingStatus,
   type EntityId,
+  type EvaluationResult,
   type Feedback,
   type Interview,
   type NewActivity,
@@ -51,7 +52,7 @@ import type {
   TaskRepository,
   TaskView,
 } from "../types";
-import { pageBounds, toCount, type Database } from "./db";
+import { escapeLike, pageBounds, toCount, type Database } from "./db";
 
 /* ------------------------------------------------------------------ */
 /* Colloqui                                                             */
@@ -71,6 +72,14 @@ function interviewConditions(query: Omit<InterviewQuery, "limit" | "offset" | "o
   if (query.candidateId) conditions.push(eq(applications.candidateId, query.candidateId));
   if (query.applicationId) conditions.push(eq(interviews.applicationId, query.applicationId));
   if (query.selectionId) conditions.push(eq(applications.selectionId, query.selectionId));
+  if (query.text) {
+    const term = `%${escapeLike(query.text)}%`;
+    conditions.push(
+      sql`(${candidates.firstName} || ' ' || ${candidates.lastName} ILIKE ${term}
+        OR ${candidates.lastName} || ' ' || ${candidates.firstName} ILIKE ${term}
+        OR ${recruitmentSelections.title} ILIKE ${term} OR ${companies.name} ILIKE ${term})`,
+    );
+  }
   return and(...conditions);
 }
 
@@ -87,6 +96,10 @@ export class PostgresInterviewRepository implements InterviewRepository {
         companyId: companies.id,
         companyName: companies.name,
         recruiterName: users.displayName,
+        outcome: sql<EvaluationResult | null>`(
+          SELECT e.result FROM application_evaluations e
+          WHERE e.interview_id = ${interviews.id} ORDER BY e.evaluated_at DESC LIMIT 1
+        )`,
         total: sql<number>`count(*) OVER ()::int`,
       })
       .from(interviews)
@@ -107,6 +120,7 @@ export class PostgresInterviewRepository implements InterviewRepository {
         row.interview.recruiterId && row.recruiterName
           ? { id: row.interview.recruiterId, displayName: row.recruiterName }
           : null,
+      outcome: row.outcome,
     };
   }
 

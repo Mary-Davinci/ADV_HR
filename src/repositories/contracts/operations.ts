@@ -39,6 +39,8 @@ export interface InterviewQuery extends PageRequest {
   candidateId?: EntityId;
   applicationId?: EntityId;
   selectionId?: EntityId;
+  /** Nome o cognome del candidato, titolo della selezione o azienda. */
+  text?: string;
   order?: "asc" | "desc";
 }
 
@@ -48,6 +50,8 @@ export interface InterviewView {
   selection: { id: EntityId; title: string };
   company: { id: EntityId; name: string };
   recruiter: UserRef | null;
+  /** Ultimo esito registrato per questo colloquio, se c'è. */
+  outcome?: EvaluationResult | null;
 }
 
 export type InterviewInput = {
