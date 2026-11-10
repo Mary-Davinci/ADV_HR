@@ -58,6 +58,8 @@ export function RegisterCompletedInterviewButton({
     <>
       <Button
         variant="outline"
+        size="sm"
+        aria-label="Registra colloquio svolto"
         disabled={applications.length === 0}
         onClick={() => {
           form.reset(defaults());
@@ -65,7 +67,7 @@ export function RegisterCompletedInterviewButton({
         }}
       >
         <CalendarCheck aria-hidden="true" />
-        Registra colloquio svolto
+        Registra colloquio
       </Button>
       <FormDialog
         open={open}

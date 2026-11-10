@@ -11,13 +11,9 @@ import {
 } from "@/features/interviews/components/candidate-interview-actions";
 import { InterviewDeleteButton } from "@/features/interviews/components/interview-delete-button";
 import { InterviewEditButton } from "@/features/interviews/components/interview-edit-button";
-import { OutcomeQuickForm } from "@/features/interviews/components/outcome-quick-form";
-import { AdvanceStageButton } from "@/features/recruiting/components/advance-stage-button";
 import { ApplicationActions } from "@/features/recruiting/components/application-actions";
 import { EvaluationBadge, InterviewStatusBadge, StageBadge } from "@/features/recruiting/components/badges";
-import { stagePath } from "@/features/recruiting/stage-path";
-import { formatDate, formatDateTime, formatSlot, formatTimeAgo } from "@/lib/format";
-import { cn } from "@/lib/utils";
+import { formatDate, formatDateTime, formatSlot } from "@/lib/format";
 import type { CandidateProfileView } from "@/services/candidate-service";
 
 export interface PanelPermissions {
@@ -31,61 +27,6 @@ type ApplicationViewItem = CandidateProfileView["applications"][number];
 type InterviewItem = CandidateProfileView["interviews"][number];
 
 const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
-
-/** Barra delle fasi: completate, attuale, da fare; esiti finali e fasi fuori percorso come etichetta. */
-function StageProgress({ stages, current }: { stages: RecruitingStage[]; current: RecruitingStage }) {
-  const path = stagePath(stages, current);
-  const reached = path.outcome ? path.steps.length : path.currentIndex;
-  return (
-    <div className="space-y-2">
-      <ol
-        aria-label={`Fase della selezione: ${current.label}`}
-        className="grid gap-1.5"
-        style={{ gridTemplateColumns: `repeat(${Math.max(path.steps.length, 1)}, minmax(0, 1fr))` }}
-      >
-        {path.steps.map((step, index) => {
-          const isCurrent = index === path.currentIndex;
-          return (
-            <li key={step.id} aria-current={isCurrent ? "step" : undefined} className="flex min-w-0 flex-col gap-1.5">
-              <span
-                aria-hidden="true"
-                className={cn(
-                  "h-1.5 rounded-full",
-                  isCurrent ? "bg-primary" : index < reached ? "bg-[#c9a24a]" : "bg-muted",
-                )}
-              />
-              <span
-                className={cn(
-                  "truncate text-xs",
-                  isCurrent ? "font-semibold text-foreground" : "text-muted-foreground",
-                )}
-                title={step.label}
-              >
-                {step.label}
-              </span>
-            </li>
-          );
-        })}
-      </ol>
-      {(path.outcome ?? path.aside) && (
-        <p className="flex items-center gap-2 text-sm">
-          <span className="text-muted-foreground">{path.outcome ? "Esito:" : "Fase attuale:"}</span>
-          <StageBadge code={current.code} label={current.label} />
-        </p>
-      )}
-    </div>
-  );
-}
-
-/** Colloquio più recente già svolto (o passato); in mancanza, il più recente in assoluto. */
-function lastInterview(interviews: InterviewItem[], now: Date) {
-  const sorted = [...interviews].sort((a, b) => b.interview.scheduledAt.getTime() - a.interview.scheduledAt.getTime());
-  return (
-    sorted.find((item) => item.interview.status === "COMPLETED" || item.interview.scheduledAt <= now) ??
-    sorted[0] ??
-    null
-  );
-}
 
 function ApplicationCard({
   view,
@@ -106,12 +47,9 @@ function ApplicationCard({
   const evaluations = profile.evaluations[view.application.id] ?? [];
   const feedbacks = profile.feedbacks.filter((feedback) => feedback.applicationId === view.application.id);
   const interviews = profile.interviews.filter((item) => item.interview.applicationId === view.application.id);
-  const last = lastInterview(interviews, now);
-  const lastOutcome = last ? evaluations.find((evaluation) => evaluation.interviewId === last.interview.id) : null;
   const upcoming = interviews
     .filter((item) => item.interview.status === "SCHEDULED" && item.interview.scheduledAt > now)
     .sort((a, b) => a.interview.scheduledAt.getTime() - b.interview.scheduledAt.getTime())[0];
-  const next = stagePath(stages, view.stage).next;
   const closed = view.stage.isTerminal || view.application.closedAt !== null;
   const headingId = `application-${view.application.id}`;
 
@@ -159,6 +97,10 @@ function ApplicationCard({
             {` · dal ${formatDate(view.application.createdAt)}`}
             {view.recruiter && ` · recruiter ${view.recruiter.displayName}`}
           </p>
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <StageBadge code={view.stage.code} label={view.stage.label} />
+            {view.latestEvaluation && <EvaluationBadge result={view.latestEvaluation.result} />}
+          </div>
         </div>
         <ApplicationActions
           compact
@@ -174,84 +116,27 @@ function ApplicationCard({
         />
       </CardHeader>
 
-      <CardContent className="space-y-5">
-        <StageProgress stages={stages} current={view.stage} />
-
-        <div className="grid gap-3 md:grid-cols-2">
-          <section aria-label="Esito di chiamata o colloquio" className="space-y-3 rounded-xl border p-4">
-            <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-              Esito di chiamata o colloquio
-            </p>
-            {last ? (
-              <p className="flex flex-wrap items-center gap-2 text-sm">
-                <span className="text-muted-foreground">Ultimo:</span>
-                <span className="font-medium">
-                  {INTERVIEW_TYPE_LABELS[last.interview.type]} · {formatSlot(last.interview.scheduledAt)}
-                </span>
-                {lastOutcome ? (
-                  <EvaluationBadge result={lastOutcome.result} />
-                ) : (
-                  <InterviewStatusBadge status={last.interview.status} />
-                )}
+      <CardContent className="space-y-4">
+        {(upcoming || (!closed && permissions.interview)) && (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {upcoming && (
+              <p className="text-sm text-muted-foreground">
+                <span className="font-medium text-foreground">In programma:</span>{" "}
+                {INTERVIEW_TYPE_LABELS[upcoming.interview.type]} · {formatSlot(upcoming.interview.scheduledAt)}
               </p>
-            ) : (
-              <p className="text-sm text-muted-foreground">Nessuna chiamata o colloquio registrato.</p>
             )}
             {!closed && permissions.interview && (
-              <OutcomeQuickForm
+              <RegisterCompletedInterviewButton
                 candidateId={profile.candidate.id}
-                applicationId={view.application.id}
+                candidateName={profile.fullName}
+                applications={[{ id: view.application.id, label: `${view.selection.title} · ${view.company.name}` }]}
                 recruiters={recruiters}
                 defaultRecruiterId={view.application.recruiterId ?? currentUserId}
                 canEvaluate={permissions.evaluate}
               />
             )}
-          </section>
-
-          <section aria-label="Prossimo passo" className="space-y-1.5 rounded-xl border p-4">
-            <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Prossimo passo</p>
-            {closed ? (
-              <p className="font-medium">Candidatura chiusa · {view.stage.label}</p>
-            ) : upcoming ? (
-              <>
-                <p className="font-medium">
-                  {INTERVIEW_TYPE_LABELS[upcoming.interview.type]} · {formatSlot(upcoming.interview.scheduledAt)}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {upcoming.interview.location ?? upcoming.interview.meetingUrl ?? "Luogo da definire"}
-                </p>
-              </>
-            ) : (
-              <p className="font-medium">Nessun colloquio in programma</p>
-            )}
-            <p className="text-sm text-muted-foreground">
-              Ultimo contatto: {view.lastContactAt ? formatTimeAgo(view.lastContactAt) : "nessuno"}
-            </p>
-            {!closed && (permissions.manage || permissions.interview) && (
-              <div className="flex flex-wrap gap-2 pt-1">
-                {permissions.manage && next && (
-                  <AdvanceStageButton
-                    applicationId={view.application.id}
-                    candidateName={profile.fullName}
-                    stage={{ id: next.id, label: next.label }}
-                  />
-                )}
-                {permissions.interview && (
-                  <RegisterCompletedInterviewButton
-                    candidateId={profile.candidate.id}
-                    candidateName={profile.fullName}
-                    applications={[
-                      { id: view.application.id, label: `${view.selection.title} · ${view.company.name}` },
-                    ]}
-                    recruiters={recruiters}
-                    defaultRecruiterId={view.application.recruiterId}
-                    canEvaluate={permissions.evaluate}
-                  />
-                )}
-              </div>
-            )}
-          </section>
-        </div>
+          </div>
+        )}
 
         <details className="group rounded-xl border px-4 py-3">
           <summary className="cursor-pointer text-sm font-medium text-primary">
@@ -367,7 +252,7 @@ function InterviewEntry({
   );
 }
 
-/** Una card per candidatura: fasi, ultimo colloquio e prossimo passo in vista, storico richiudibile. */
+/** Una card per candidatura: fase ed esito in vista, azioni compatte e storico richiudibile. */
 export function ApplicationsPanel({
   profile,
   stages,
