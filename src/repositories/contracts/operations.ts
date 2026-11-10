@@ -31,6 +31,8 @@ import type {
 export interface InterviewQuery extends PageRequest {
   from?: Date;
   to?: Date;
+  /** Solo colloqui con orario successivo a questo istante (esclusi quelli che iniziano esattamente ora). */
+  scheduledAfter?: Date;
   /** Colloqui conclusi a questa data: orario passato oppure stato diverso da «Programmato». */
   concludedBy?: Date;
   statuses?: InterviewStatus[];
@@ -54,6 +56,17 @@ export interface InterviewView {
   outcome?: EvaluationResult | null;
 }
 
+/** Voce del registro: colloquio reale oppure esito storico senza colloquio collegato. */
+export interface InterviewHistoryView extends Pick<InterviewView, "candidate" | "selection" | "company" | "recruiter"> {
+  id: EntityId;
+  source: "INTERVIEW" | "EVALUATION";
+  occurredAt: Date;
+  type: InterviewType | null;
+  status: InterviewStatus | null;
+  notes: string | null;
+  outcome: EvaluationResult | null;
+}
+
 export type InterviewInput = {
   recruiterId: EntityId | null;
   scheduledAt: Date;
@@ -74,6 +87,7 @@ export type CompletedInterviewInput = Pick<InterviewInput, "scheduledAt" | "dura
 
 export interface InterviewRepository {
   list(query: InterviewQuery): Promise<Page<InterviewView>>;
+  listHistory(query: InterviewQuery & { concludedBy: Date }): Promise<Page<InterviewHistoryView>>;
   getView(id: EntityId): Promise<InterviewView | null>;
   getById(id: EntityId): Promise<Interview | null>;
   create(applicationId: EntityId, input: InterviewInput): Promise<Interview>;

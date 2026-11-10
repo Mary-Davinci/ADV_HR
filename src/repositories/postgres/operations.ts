@@ -1,7 +1,9 @@
-import { aliasedTable, and, asc, desc, eq, gte, inArray, lt, lte, ne, or, sql, type SQL } from "drizzle-orm";
+import { aliasedTable, and, asc, desc, eq, gt, gte, inArray, lt, lte, ne, or, sql, type SQL } from "drizzle-orm";
+import { unionAll } from "drizzle-orm/pg-core";
 
 import {
   activities,
+  applicationEvaluations,
   applications,
   auditLogs,
   candidateProfiles,
@@ -26,6 +28,8 @@ import {
   type EvaluationResult,
   type Feedback,
   type Interview,
+  type InterviewStatus,
+  type InterviewType,
   type NewActivity,
   type NewAuditLog,
   type Page,
@@ -43,6 +47,7 @@ import type {
   FeedbackRepository,
   FeedbackView,
   InterviewInput,
+  InterviewHistoryView,
   InterviewQuery,
   InterviewRepository,
   InterviewView,
@@ -62,6 +67,7 @@ function interviewConditions(query: Omit<InterviewQuery, "limit" | "offset" | "o
   const conditions: SQL[] = [];
   if (query.from) conditions.push(gte(interviews.scheduledAt, query.from));
   if (query.to) conditions.push(lte(interviews.scheduledAt, query.to));
+  if (query.scheduledAfter) conditions.push(gt(interviews.scheduledAt, query.scheduledAfter));
   if (query.concludedBy) {
     const concluded = or(lte(interviews.scheduledAt, query.concludedBy), ne(interviews.status, "SCHEDULED"));
     if (concluded) conditions.push(concluded);
@@ -137,6 +143,141 @@ export class PostgresInterviewRepository implements InterviewRepository {
     return { total: toCount(rows[0]?.total ?? 0), items: rows.map((row) => this.toView(row)) };
   }
 
+  async listHistory(query: InterviewQuery & { concludedBy: Date }): Promise<Page<InterviewHistoryView>> {
+    const { limit, offset } = pageBounds(query);
+    const interviewRows = this.db
+      .select({
+        id: interviews.id,
+        source: sql<InterviewHistoryView["source"]>`'INTERVIEW'`.as("source"),
+        occurredAt: sql<Date>`${interviews.scheduledAt}`.as("occurred_at"),
+        type: sql<InterviewType | null>`${interviews.type}`.as("type"),
+        status: sql<InterviewStatus | null>`${interviews.status}`.as("status"),
+        notes: interviews.notes,
+        outcome: sql<EvaluationResult | null>`(
+          SELECT e.result FROM application_evaluations e
+          WHERE e.interview_id = ${interviews.id} ORDER BY e.evaluated_at DESC, e.id DESC LIMIT 1
+        )`.as("outcome"),
+        candidateId: sql<string>`${candidates.id}`.as("candidate_id"),
+        firstName: candidates.firstName,
+        lastName: candidates.lastName,
+        selectionId: sql<string>`${recruitmentSelections.id}`.as("selection_id"),
+        selectionTitle: recruitmentSelections.title,
+        companyId: sql<string>`${companies.id}`.as("company_id"),
+        companyName: companies.name,
+        recruiterId: sql<string | null>`${interviews.recruiterId}`.as("recruiter_id"),
+        recruiterName: users.displayName,
+      })
+      .from(interviews)
+      .innerJoin(applications, eq(applications.id, interviews.applicationId))
+      .innerJoin(candidates, eq(candidates.id, applications.candidateId))
+      .innerJoin(recruitmentSelections, eq(recruitmentSelections.id, applications.selectionId))
+      .innerJoin(companies, eq(companies.id, recruitmentSelections.companyId))
+      .leftJoin(users, eq(users.id, interviews.recruiterId))
+      .where(interviewConditions(query));
+
+    // Gli esiti preesistenti non hanno un colloquio: conservarne l'ultima versione,
+    // senza trasformare una valutazione in un appuntamento o duplicare gli esiti collegati.
+    const conditions: SQL[] = [
+      sql`${applicationEvaluations.interviewId} IS NULL`,
+      lte(applicationEvaluations.evaluatedAt, query.concludedBy),
+      sql`NOT EXISTS (
+        SELECT 1 FROM application_evaluations newer
+        WHERE newer.application_id = ${applicationEvaluations.applicationId}
+          AND newer.interview_id IS NULL
+          AND (newer.evaluated_at, newer.id) > (${applicationEvaluations.evaluatedAt}, ${applicationEvaluations.id})
+      )`,
+    ];
+    if (query.from) conditions.push(gte(applicationEvaluations.evaluatedAt, query.from));
+    if (query.to) conditions.push(lte(applicationEvaluations.evaluatedAt, query.to));
+    if (query.recruiterId) conditions.push(eq(applicationEvaluations.evaluatedBy, query.recruiterId));
+    if (query.companyId) conditions.push(eq(companies.id, query.companyId));
+    if (query.candidateId) conditions.push(eq(candidates.id, query.candidateId));
+    if (query.applicationId) conditions.push(eq(applications.id, query.applicationId));
+    if (query.selectionId) conditions.push(eq(recruitmentSelections.id, query.selectionId));
+    if (query.text) {
+      const term = `%${escapeLike(query.text)}%`;
+      conditions.push(sql`(${candidates.firstName} || ' ' || ${candidates.lastName} ILIKE ${term}
+        OR ${candidates.lastName} || ' ' || ${candidates.firstName} ILIKE ${term}
+        OR ${recruitmentSelections.title} ILIKE ${term} OR ${companies.name} ILIKE ${term})`);
+    }
+    const evaluationRows = this.db
+      .select({
+        id: applicationEvaluations.id,
+        source: sql<InterviewHistoryView["source"]>`'EVALUATION'`.as("source"),
+        occurredAt: sql<Date>`${applicationEvaluations.evaluatedAt}`.as("occurred_at"),
+        type: sql<InterviewType | null>`NULL`.as("type"),
+        status: sql<InterviewStatus | null>`NULL`.as("status"),
+        notes: sql<
+          string | null
+        >`coalesce(nullif(${applicationEvaluations.notes}, ''), ${applicationEvaluations.reason})`,
+        outcome: sql<EvaluationResult | null>`${applicationEvaluations.result}`.as("outcome"),
+        candidateId: sql<string>`${candidates.id}`.as("candidate_id"),
+        firstName: candidates.firstName,
+        lastName: candidates.lastName,
+        selectionId: sql<string>`${recruitmentSelections.id}`.as("selection_id"),
+        selectionTitle: recruitmentSelections.title,
+        companyId: sql<string>`${companies.id}`.as("company_id"),
+        companyName: companies.name,
+        recruiterId: sql<string | null>`${applicationEvaluations.evaluatedBy}`.as("recruiter_id"),
+        recruiterName: users.displayName,
+      })
+      .from(applicationEvaluations)
+      .innerJoin(applications, eq(applications.id, applicationEvaluations.applicationId))
+      .innerJoin(candidates, eq(candidates.id, applications.candidateId))
+      .innerJoin(recruitmentSelections, eq(recruitmentSelections.id, applications.selectionId))
+      .innerJoin(companies, eq(companies.id, recruitmentSelections.companyId))
+      .leftJoin(users, eq(users.id, applicationEvaluations.evaluatedBy))
+      .where(and(...conditions));
+
+    const history = unionAll(interviewRows, evaluationRows).as("history");
+    const rows = await this.db
+      .select({
+        id: history.id,
+        source: history.source,
+        occurredAt: history.occurredAt,
+        type: history.type,
+        status: history.status,
+        notes: history.notes,
+        outcome: history.outcome,
+        candidateId: history.candidateId,
+        firstName: history.firstName,
+        lastName: history.lastName,
+        selectionId: history.selectionId,
+        selectionTitle: history.selectionTitle,
+        companyId: history.companyId,
+        companyName: history.companyName,
+        recruiterId: history.recruiterId,
+        recruiterName: history.recruiterName,
+        total: sql<number>`count(*) OVER ()::int`,
+      })
+      .from(history)
+      .orderBy(desc(history.occurredAt), desc(history.id))
+      .limit(limit)
+      .offset(offset);
+    let total = toCount(rows[0]?.total ?? 0);
+    if (offset > 0 && rows.length === 0) {
+      const [count] = await this.db.select({ total: sql<number>`count(*)::int` }).from(history);
+      total = toCount(count?.total);
+    }
+    return {
+      total,
+      items: rows.map((entry) => ({
+        id: entry.id,
+        source: entry.source,
+        occurredAt: new Date(entry.occurredAt),
+        type: entry.type,
+        status: entry.status,
+        notes: entry.notes,
+        outcome: entry.outcome,
+        candidate: { id: entry.candidateId, fullName: getCandidateFullName(entry) },
+        selection: { id: entry.selectionId, title: entry.selectionTitle },
+        company: { id: entry.companyId, name: entry.companyName },
+        recruiter:
+          entry.recruiterId && entry.recruiterName ? { id: entry.recruiterId, displayName: entry.recruiterName } : null,
+      })),
+    };
+  }
+
   async getView(id: EntityId): Promise<InterviewView | null> {
     const [row] = await this.viewQuery().where(eq(interviews.id, id)).limit(1);
     return row ? this.toView(row) : null;
@@ -171,7 +312,9 @@ export class PostgresInterviewRepository implements InterviewRepository {
       .select({ count: sql<number>`count(*)::int` })
       .from(interviews)
       .innerJoin(applications, eq(applications.id, interviews.applicationId))
+      .innerJoin(candidates, eq(candidates.id, applications.candidateId))
       .innerJoin(recruitmentSelections, eq(recruitmentSelections.id, applications.selectionId))
+      .innerJoin(companies, eq(companies.id, recruitmentSelections.companyId))
       .where(interviewConditions(query));
     return toCount(row?.count);
   }

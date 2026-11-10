@@ -14,6 +14,11 @@ export function createInterviewService(context: ServiceContext) {
       return store.interviews.list(query);
     },
 
+    listHistory(query: InterviewQuery & { concludedBy: Date }) {
+      assertCan(actor, "interview.read");
+      return store.interviews.listHistory(query);
+    },
+
     async getDetail(id: EntityId) {
       assertCan(actor, "interview.read");
       const view = await store.interviews.getView(id);

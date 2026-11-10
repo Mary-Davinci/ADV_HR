@@ -3,19 +3,22 @@ import { describe, expect, it } from "vitest";
 
 import { buildInterviewQuery, interviewFiltersSchema } from "./filters";
 
+const NOW = new Date(2026, 10, 10, 12, 0);
+
 describe("interview filters", () => {
-  it("opens on what is still to do: every scheduled interview, oldest first", () => {
-    const query = buildInterviewQuery(interviewFiltersSchema.parse({}));
-    expect(query).toMatchObject({ statuses: ["SCHEDULED"], order: "asc", offset: 0 });
-    expect(query.from).toBeUndefined();
-    expect(query.to).toBeUndefined();
+  it("opens on interviews still to hold: scheduled after now, soonest first", () => {
+    expect(buildInterviewQuery(interviewFiltersSchema.parse({}), NOW)).toMatchObject({
+      statuses: ["SCHEDULED"],
+      scheduledAfter: NOW,
+      order: "asc",
+      offset: 0,
+    });
   });
 
-  it("lists concluded interviews newest first", () => {
-    expect(buildInterviewQuery(interviewFiltersSchema.parse({ view: "done" }))).toMatchObject({
-      statuses: ["COMPLETED", "CANCELLED", "NO_SHOW"],
-      order: "desc",
-    });
+  it("lists everything already past as done, even if the status was never updated", () => {
+    const query = buildInterviewQuery(interviewFiltersSchema.parse({ view: "done" }), NOW);
+    expect(query).toMatchObject({ concludedBy: NOW, order: "desc" });
+    expect(query.statuses).toBeUndefined();
   });
 
   it("keeps old links working", () => {
@@ -28,12 +31,15 @@ describe("interview filters", () => {
     const recruiter = "9ce3351b-109f-4a3f-9df1-4fd636f10fdc";
     const day = new Date(2026, 10, 12);
     expect(
-      buildInterviewQuery(interviewFiltersSchema.parse({ date: "2026-11-12", recruiter, q: " Rossi ", view: "done" })),
+      buildInterviewQuery(
+        interviewFiltersSchema.parse({ date: "2026-11-12", recruiter, q: " Rossi ", view: "done" }),
+        NOW,
+      ),
     ).toMatchObject({ from: startOfDay(day), to: endOfDay(day), recruiterId: recruiter, text: "Rossi" });
   });
 
   it("ignores invalid URL values", () => {
     const filters = interviewFiltersSchema.parse({ view: "invalid", date: "invalid", page: "-1" });
-    expect(buildInterviewQuery(filters)).toMatchObject({ statuses: ["SCHEDULED"], offset: 0 });
+    expect(buildInterviewQuery(filters, NOW)).toMatchObject({ statuses: ["SCHEDULED"], offset: 0 });
   });
 });

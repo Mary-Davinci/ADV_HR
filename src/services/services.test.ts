@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { seedDatabase } from "@/db/seed/seed";
-import { interviews as interviewTable } from "@/db/schema";
+import { applicationEvaluations as evaluationTable, interviews as interviewTable } from "@/db/schema";
 import { DomainRuleError, type RoleCode, type SessionUser } from "@/domain";
 import { ForbiddenError } from "@/lib/auth/permissions";
 import { buildInterviewQuery, interviewFiltersSchema } from "@/features/interviews/filters";
@@ -280,10 +280,10 @@ describe("services", () => {
         meetingUrl: null,
         notes: null,
       });
-      const agenda = await service.list(buildInterviewQuery(interviewFiltersSchema.parse({})));
+      const agenda = await service.list(buildInterviewQuery(interviewFiltersSchema.parse({}), NOW));
       expect(agenda.items.map((item) => item.interview.id)).toContain(id);
       expect(agenda.items.every((item) => item.interview.status === "SCHEDULED")).toBe(true);
-      const done = await service.list(buildInterviewQuery(interviewFiltersSchema.parse({ view: "done" })));
+      const done = await service.list(buildInterviewQuery(interviewFiltersSchema.parse({ view: "done" }), NOW));
       expect(done.items.map((item) => item.interview.id)).not.toContain(id);
     });
 
@@ -324,7 +324,7 @@ describe("services", () => {
         interviewId: null,
         content: feedback.content,
       });
-      const agenda = await service.list(buildInterviewQuery(interviewFiltersSchema.parse({})));
+      const agenda = await service.list(buildInterviewQuery(interviewFiltersSchema.parse({}), NOW));
       expect(agenda.items.map((item) => item.interview.id)).not.toContain(id);
       const audit = await testDb.store.audit.list({ type: "INTERVIEW", id });
       expect(audit).toEqual(
@@ -374,6 +374,51 @@ describe("services", () => {
       const selection = await createSelectionService(ctx(actors.recruiter)).getDetail(view.selection.id);
       expect(selection?.pastInterviews.map((item) => item.interview.id)).toContain(id);
       expect(selection?.upcomingInterviews.map((item) => item.interview.id)).not.toContain(id);
+    });
+
+    it("splits the agenda without losing past scheduled interviews or duplicating boundary entries", async () => {
+      const view = await applicationOf("Cattaneo");
+      const service = createInterviewService(ctx(actors.recruiter));
+      const created = [] as Array<{ id: string; todo: boolean }>;
+      try {
+        for (const status of ["SCHEDULED", "COMPLETED", "CANCELLED", "NO_SHOW"] as const) {
+          for (const offset of [-1, 0, 1]) {
+            const interview = await testDb.store.interviews.create(view.application.id, {
+              scheduledAt: new Date(NOW.getTime() + offset),
+              durationMinutes: 30,
+              type: "HR",
+              status,
+              recruiterId: actors.recruiter.id,
+              location: null,
+              meetingUrl: null,
+              notes: null,
+            });
+            created.push({ id: interview.id, todo: status === "SCHEDULED" && offset > 0 });
+          }
+        }
+        for (const agendaView of ["todo", "done"] as const) {
+          const query = {
+            ...buildInterviewQuery(
+              interviewFiltersSchema.parse({
+                view: agendaView,
+                q: view.candidate.fullName,
+                recruiter: actors.recruiter.id,
+                company: view.company.id,
+              }),
+              NOW,
+            ),
+            applicationId: view.application.id,
+          };
+          const result = await service.list(query);
+          const ids = result.items.map((item) => item.interview.id);
+          for (const entry of created) {
+            expect(ids.includes(entry.id)).toBe(entry.todo === (agendaView === "todo"));
+          }
+          expect(result.total).toBe(await testDb.store.interviews.count(query));
+        }
+      } finally {
+        for (const entry of created) await testDb.store.interviews.delete(entry.id);
+      }
     });
 
     it("refuses to schedule interviews in the past", async () => {
@@ -458,6 +503,70 @@ describe("services", () => {
       reason: "Requisiti soddisfatti",
     });
 
+    it.each(["SUITABLE", "NOT_SUITABLE"] as const)(
+      "includes the latest unlinked historical %s outcome alongside a future interview",
+      async (result) => {
+        const view = await applicationOf("Cattaneo");
+        const service = createInterviewService(ctx(actors.recruiter));
+        const evaluationIds: string[] = [];
+        const before = await testDb.store.interviews.count({ applicationId: view.application.id });
+        try {
+          for (const minutes of [120, 60]) {
+            const [evaluation] = await testDb.db
+              .insert(evaluationTable)
+              .values({
+                applicationId: view.application.id,
+                result,
+                reason: "Esito della prima fase",
+                notes: "Valutazione storica senza appuntamento",
+                evaluatedBy: actors.recruiter.id,
+                evaluatedAt: new Date(NOW.getTime() - minutes * 60_000),
+              })
+              .returning();
+            evaluationIds.push(evaluation!.id);
+          }
+          const query = {
+            ...buildInterviewQuery(
+              interviewFiltersSchema.parse({
+                view: "done",
+                q: view.candidate.fullName,
+                company: view.company.id,
+                recruiter: actors.recruiter.id,
+                date: "2026-09-30",
+              }),
+              NOW,
+            ),
+            applicationId: view.application.id,
+            concludedBy: NOW,
+          };
+          const history = await service.listHistory(query);
+          expect(history.items.filter((entry) => entry.source === "EVALUATION")).toEqual([
+            expect.objectContaining({
+              id: evaluationIds[1],
+              outcome: result,
+              type: null,
+              status: null,
+              occurredAt: new Date(NOW.getTime() - 60 * 60_000),
+              candidate: { id: view.candidate.id, fullName: view.candidate.fullName },
+              recruiter: expect.objectContaining({ id: actors.recruiter.id }),
+            }),
+          ]);
+          expect(await service.listHistory({ ...query, limit: 1 })).toMatchObject({ total: history.total });
+          expect(await service.listHistory({ ...query, offset: history.total + 1 })).toEqual({
+            total: history.total,
+            items: [],
+          });
+          expect((await service.listHistory({ ...query, text: "no matching candidate" })).items).toEqual([]);
+          expect((await service.listHistory({ ...query, recruiterId: actors.viewer.id })).items).toEqual([]);
+          expect(await testDb.store.interviews.count({ applicationId: view.application.id })).toBe(before);
+          await expect(createInterviewService(ctx(actors.viewer)).listHistory(query)).resolves.toBeDefined();
+        } finally {
+          for (const id of evaluationIds)
+            await testDb.db.delete(evaluationTable).where(sql`${evaluationTable.id} = ${id}`);
+        }
+      },
+    );
+
     it("preserves existing application evaluations without inventing an interview", async () => {
       const view = await applicationOf("Longo");
       await createApplicationService(ctx(actors.recruiter)).evaluate(view.application.id, {
@@ -484,11 +593,18 @@ describe("services", () => {
       const service = createInterviewService(ctx(actors.admin));
       const { id } = await service.recordCompleted(view.candidate.id, view.application.id, report());
       const done = await service.list(
-        buildInterviewQuery(interviewFiltersSchema.parse({ view: "done", q: "serra" })),
+        buildInterviewQuery(interviewFiltersSchema.parse({ view: "done", q: "serra" }), NOW),
       );
       expect(done.items.find((item) => item.interview.id === id)).toMatchObject({ outcome: "SUITABLE" });
       expect(done.items.every((item) => item.candidate.fullName.toLowerCase().includes("serra"))).toBe(true);
-      const todo = await service.list(buildInterviewQuery(interviewFiltersSchema.parse({ q: "serra" })));
+      const history = await service.listHistory({ text: "serra", concludedBy: NOW });
+      expect(history.items.filter((entry) => entry.id === id)).toEqual([
+        expect.objectContaining({ source: "INTERVIEW", outcome: "SUITABLE", status: "COMPLETED" }),
+      ]);
+      const evaluations = await testDb.store.applications.listEvaluations(view.application.id);
+      const linked = evaluations.find((evaluation) => evaluation.interviewId === id)!;
+      expect(history.items.map((entry) => entry.id)).not.toContain(linked.id);
+      const todo = await service.list(buildInterviewQuery(interviewFiltersSchema.parse({ q: "serra" }), NOW));
       expect(todo.items.map((item) => item.interview.id)).not.toContain(id);
     });
 

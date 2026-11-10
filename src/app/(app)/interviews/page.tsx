@@ -27,12 +27,20 @@ export default async function InterviewsPage({ searchParams }: PageProps<"/inter
   const view: View = filters.view ?? DEFAULT_INTERVIEW_VIEW;
   const other: View = view === "todo" ? "done" : "todo";
   const services = await getServices();
+  const now = new Date();
+  const listView = (selectedView: View, countOnly = false) => {
+    const query = {
+      ...buildInterviewQuery(countOnly ? { ...filters, page: undefined } : filters, now, selectedView),
+      ...(countOnly ? { limit: 1 } : {}),
+    };
+    return selectedView === "done"
+      ? services.interviews.listHistory({ ...query, concludedBy: now })
+      : services.interviews.list(query);
+  };
   const [result, otherCount, recruiters, companies] = await Promise.all([
-    services.interviews.list(buildInterviewQuery(filters, view)),
+    listView(view),
     // Solo il totale dell'altra vista, per il numero nello switcher.
-    services.interviews
-      .list({ ...buildInterviewQuery({ ...filters, page: undefined }, other), limit: 1 })
-      .then((page) => page.total),
+    listView(other, true).then((page) => page.total),
     services.users.listRecruiters(),
     services.companies.options(),
   ]);
@@ -89,6 +97,13 @@ export default async function InterviewsPage({ searchParams }: PageProps<"/inter
         ]}
       />
 
+      {view === "done" && (
+        <p className="text-sm text-muted-foreground">
+          Sono inclusi gli esiti storici della prima fase. Le righe “Valutazione” riportano la data di registrazione
+          dell’esito.
+        </p>
+      )}
+
       {result.items.length === 0 ? (
         <EmptyState
           icon={CalendarCheck}
@@ -100,7 +115,7 @@ export default async function InterviewsPage({ searchParams }: PageProps<"/inter
           }
         />
       ) : (
-        <InterviewsTable items={result.items} done={view === "done"} now={new Date()} />
+        <InterviewsTable items={result.items} done={view === "done"} now={now} />
       )}
       <Pagination
         page={filters.page ?? 1}
