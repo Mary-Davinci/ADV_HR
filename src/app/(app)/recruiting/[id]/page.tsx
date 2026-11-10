@@ -122,7 +122,13 @@ export default async function CandidatePage({ params, searchParams }: PageProps<
       count: profile.applications.length,
       content: (
         <div className="space-y-6">
-          <ApplicationsPanel profile={profile} stages={stages} recruiters={recruiters} permissions={permissions} />
+          <ApplicationsPanel
+            profile={profile}
+            stages={stages}
+            recruiters={recruiters}
+            permissions={permissions}
+            currentUserId={user.id}
+          />
           <Suspense fallback={<RecommendedSelectionsSkeleton />}>
             <RecommendedSelections candidateId={id} canAdd={permissions.manage} />
           </Suspense>

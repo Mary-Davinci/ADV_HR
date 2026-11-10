@@ -101,7 +101,7 @@ export function CandidateSummary({
   );
   const facts = [
     {
-      label: "Dove",
+      label: "Residenza",
       value: place,
       action: canEdit && <EditProfileButton profile={data} compact />,
     },

@@ -11,6 +11,7 @@ import {
 } from "@/features/interviews/components/candidate-interview-actions";
 import { InterviewDeleteButton } from "@/features/interviews/components/interview-delete-button";
 import { InterviewEditButton } from "@/features/interviews/components/interview-edit-button";
+import { OutcomeQuickForm } from "@/features/interviews/components/outcome-quick-form";
 import { AdvanceStageButton } from "@/features/recruiting/components/advance-stage-button";
 import { ApplicationActions } from "@/features/recruiting/components/application-actions";
 import { EvaluationBadge, InterviewStatusBadge, StageBadge } from "@/features/recruiting/components/badges";
@@ -92,12 +93,14 @@ function ApplicationCard({
   stages,
   recruiters,
   permissions,
+  currentUserId,
 }: {
   view: ApplicationViewItem;
   profile: CandidateProfileView;
   stages: RecruitingStage[];
   recruiters: UserRef[];
   permissions: PanelPermissions;
+  currentUserId: string;
 }) {
   const now = new Date();
   const evaluations = profile.evaluations[view.application.id] ?? [];
@@ -175,25 +178,33 @@ function ApplicationCard({
         <StageProgress stages={stages} current={view.stage} />
 
         <div className="grid gap-3 md:grid-cols-2">
-          <section aria-label="Ultimo colloquio" className="space-y-1.5 rounded-xl border p-4">
-            <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Ultimo colloquio</p>
+          <section aria-label="Esito di chiamata o colloquio" className="space-y-3 rounded-xl border p-4">
+            <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              Esito di chiamata o colloquio
+            </p>
             {last ? (
-              <>
-                <p className="font-medium">
+              <p className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="text-muted-foreground">Ultimo:</span>
+                <span className="font-medium">
                   {INTERVIEW_TYPE_LABELS[last.interview.type]} · {formatSlot(last.interview.scheduledAt)}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {last.interview.status === "COMPLETED" ? "Svolto da " : "Con "}
-                  {last.recruiter?.displayName ?? "recruiter non indicato"}
-                  {last.interview.durationMinutes && ` · ${last.interview.durationMinutes} min`}
-                </p>
-                <div className="flex flex-wrap items-center gap-2 pt-1">
+                </span>
+                {lastOutcome ? (
+                  <EvaluationBadge result={lastOutcome.result} />
+                ) : (
                   <InterviewStatusBadge status={last.interview.status} />
-                  {lastOutcome && <EvaluationBadge result={lastOutcome.result} />}
-                </div>
-              </>
+                )}
+              </p>
             ) : (
-              <p className="text-sm text-muted-foreground">Nessun colloquio registrato.</p>
+              <p className="text-sm text-muted-foreground">Nessuna chiamata o colloquio registrato.</p>
+            )}
+            {!closed && permissions.interview && (
+              <OutcomeQuickForm
+                candidateId={profile.candidate.id}
+                applicationId={view.application.id}
+                recruiters={recruiters}
+                defaultRecruiterId={view.application.recruiterId ?? currentUserId}
+                canEvaluate={permissions.evaluate}
+              />
             )}
           </section>
 
@@ -362,11 +373,14 @@ export function ApplicationsPanel({
   stages,
   recruiters,
   permissions,
+  currentUserId,
 }: {
   profile: CandidateProfileView;
   stages: RecruitingStage[];
   recruiters: UserRef[];
   permissions: PanelPermissions;
+  /** Recruiter proposto per l'esito quando la candidatura non ne ha uno. */
+  currentUserId: string;
 }) {
   if (profile.applications.length === 0) {
     return (
@@ -389,6 +403,7 @@ export function ApplicationsPanel({
       stages={stages}
       recruiters={recruiters}
       permissions={permissions}
+      currentUserId={currentUserId}
     />
   );
 
