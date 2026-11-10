@@ -12,6 +12,8 @@ import type { CandidateProfileView } from "@/services/candidate-service";
 import { EditRecruiterButton } from "../section-forms";
 import { DocumentLinks } from "./document-links";
 
+const capitalize = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
+
 /** Cerchio e quadrato vitruviani del login, come filigrana dietro l'intestazione. */
 function VitruvianWatermark() {
   return (
@@ -41,13 +43,10 @@ function headline(profile: CandidateProfileView): string | null {
 }
 
 function Fact({ label, children }: { label: string; children: React.ReactNode }) {
-  const empty = children === null || children === undefined || children === "";
   return (
     <div className="flex items-baseline justify-between gap-4">
       <dt className="shrink-0 text-xs text-muted-foreground">{label}</dt>
-      <dd className={cn("min-w-0 text-right text-sm font-medium", empty && "font-normal text-muted-foreground")}>
-        {empty ? "Non indicato" : children}
-      </dd>
+      <dd className="min-w-0 text-right text-sm font-medium">{children}</dd>
     </div>
   );
 }
@@ -86,6 +85,14 @@ export function CandidateSummary({
   const languages = profile.languages.map(
     (item) => `${item.language} ${item.level === "NATIVE" ? "madrelingua" : item.level}`,
   );
+  const facts = [
+    { label: "Dove", value: place },
+    { label: "Quando", value: when },
+    { label: "Patenti", value: licenses.join(", ") },
+    { label: "Certificazioni", value: profile.certifications.map((item) => item.name).join(", ") },
+    { label: "Lingue", value: languages.join(", ") },
+  ];
+  const missingFacts = facts.filter((fact) => !fact.value).map((fact) => fact.label.toLowerCase());
 
   return (
     <aside
@@ -106,7 +113,9 @@ export function CandidateSummary({
           </h1>
           {role && <p className="text-sm font-medium">{role}</p>}
           <p className="text-sm text-muted-foreground">
-            {[age !== null ? `${age} anni` : null, candidate.nationality].filter(Boolean).join(" · ")}
+            {[age !== null ? `${age} anni` : null, candidate.nationality && capitalize(candidate.nationality)]
+              .filter(Boolean)
+              .join(" · ")}
           </p>
         </div>
         {latest ? (
@@ -122,11 +131,29 @@ export function CandidateSummary({
       </div>
 
       <dl className="relative flex flex-col gap-3 border-t border-[#ecdfc3] pt-4 dark:border-border">
-        <Fact label="Dove">{place}</Fact>
-        <Fact label="Quando">{when}</Fact>
-        <Fact label="Patenti">{licenses.join(", ")}</Fact>
-        <Fact label="Certificazioni">{profile.certifications.map((item) => item.name).join(", ")}</Fact>
-        <Fact label="Lingue">{languages.join(", ")}</Fact>
+        {facts
+          .filter((fact) => fact.value)
+          .map((fact) => (
+            <Fact key={fact.label} label={fact.label}>
+              {fact.value}
+            </Fact>
+          ))}
+        {missingFacts.length > 0 && (
+          <p className="text-xs text-muted-foreground">
+            Non indicati: {missingFacts.join(", ")}
+            {canEdit && (
+              <>
+                {" · "}
+                <a
+                  href="?tab=overview#section-dati-personali"
+                  className="font-medium text-foreground underline-offset-4 hover:underline"
+                >
+                  completa
+                </a>
+              </>
+            )}
+          </p>
+        )}
         <div className="flex items-center justify-between gap-4">
           <dt className="shrink-0 text-xs text-muted-foreground">Recruiter</dt>
           <dd className="flex min-w-0 items-center gap-1 text-right text-sm font-medium">

@@ -21,6 +21,13 @@ export function OverviewPanel({ profile, canEdit }: { profile: CandidateProfileV
       ? profile.nextInterview
       : null;
   const hasCertificates = profile.documents.some((document) => document.type === "CERTIFICATION");
+  const emptySections = [
+    profile.experiences,
+    profile.skills,
+    profile.languages,
+    profile.drivingLicenses,
+    hasCertificates ? [true] : profile.certifications,
+  ].filter((items) => items.length === 0).length;
 
   return (
     <div className="min-w-0 space-y-6">
@@ -55,31 +62,94 @@ export function OverviewPanel({ profile, canEdit }: { profile: CandidateProfileV
         )}
 
         <PersonalDetailsPanel profile={profile} canEdit={canEdit} />
-        <CollectionEditor candidateId={candidate.id} kind="experiences" items={profile.experiences} canEdit={canEdit} />
-        <SkillsEditor candidateId={candidate.id} skills={profile.skills} canEdit={canEdit} />
-        <div className="grid gap-6 xl:grid-cols-2">
-          <CollectionEditor candidateId={candidate.id} kind="languages" items={profile.languages} canEdit={canEdit} />
+        {profile.experiences.length > 0 && (
           <CollectionEditor
             candidateId={candidate.id}
-            kind="drivingLicenses"
-            items={profile.drivingLicenses}
+            kind="experiences"
+            items={profile.experiences}
             canEdit={canEdit}
           />
-        </div>
-        <div className="space-y-3">
-          <CollectionEditor
-            candidateId={candidate.id}
-            kind="certifications"
-            items={profile.certifications}
-            canEdit={canEdit}
-          />
-          {hasCertificates && (
-            <div className="px-1 text-sm">
-              <p className="text-xs font-medium text-muted-foreground">Certificazioni allegate</p>
-              <DocumentLinks documents={profile.documents} type="CERTIFICATION" />
+        )}
+        {profile.skills.length > 0 && (
+          <SkillsEditor candidateId={candidate.id} skills={profile.skills} canEdit={canEdit} />
+        )}
+        {(profile.languages.length > 0 || profile.drivingLicenses.length > 0) && (
+          <div className="grid gap-6 xl:grid-cols-2">
+            {profile.languages.length > 0 && (
+              <CollectionEditor
+                candidateId={candidate.id}
+                kind="languages"
+                items={profile.languages}
+                canEdit={canEdit}
+              />
+            )}
+            {profile.drivingLicenses.length > 0 && (
+              <CollectionEditor
+                candidateId={candidate.id}
+                kind="drivingLicenses"
+                items={profile.drivingLicenses}
+                canEdit={canEdit}
+              />
+            )}
+          </div>
+        )}
+        {(profile.certifications.length > 0 || hasCertificates) && (
+          <div className="space-y-3">
+            <CollectionEditor
+              candidateId={candidate.id}
+              kind="certifications"
+              items={profile.certifications}
+              canEdit={canEdit}
+            />
+            {hasCertificates && (
+              <div className="px-1 text-sm">
+                <p className="text-xs font-medium text-muted-foreground">Certificazioni allegate</p>
+                <DocumentLinks documents={profile.documents} type="CERTIFICATION" />
+              </div>
+            )}
+          </div>
+        )}
+        {canEdit && emptySections > 0 && (
+          <section
+            aria-label="Sezioni da compilare"
+            className="flex flex-col gap-3 rounded-xl border border-dashed p-4 sm:flex-row sm:items-center"
+          >
+            <p className="text-sm text-muted-foreground sm:mr-2">Aggiungi al profilo:</p>
+            <div className="flex flex-wrap gap-2">
+              <CollectionEditor
+                candidateId={candidate.id}
+                kind="experiences"
+                items={profile.experiences}
+                canEdit={canEdit}
+                compact
+              />
+              <SkillsEditor candidateId={candidate.id} skills={profile.skills} canEdit={canEdit} compact />
+              <CollectionEditor
+                candidateId={candidate.id}
+                kind="languages"
+                items={profile.languages}
+                canEdit={canEdit}
+                compact
+              />
+              <CollectionEditor
+                candidateId={candidate.id}
+                kind="drivingLicenses"
+                items={profile.drivingLicenses}
+                canEdit={canEdit}
+                compact
+              />
+              {!hasCertificates && (
+                <CollectionEditor
+                  candidateId={candidate.id}
+                  kind="certifications"
+                  items={profile.certifications}
+                  canEdit={canEdit}
+                  compact
+                />
+              )}
             </div>
-          )}
-        </div>
+          </section>
+        )}
       </div>
 
       <div className="min-w-0">
@@ -124,7 +194,7 @@ export function OverviewPanel({ profile, canEdit }: { profile: CandidateProfileV
                     .join(", ")
                 : "Nessuna"}
             </DetailField>
-            {(candidate.origin !== "ADV_CORE" || candidate.activatablePolicies.length > 0) && (
+            {candidate.activatablePolicies.length > 0 && (
               <DetailField label="Politiche attivabili">
                 {candidate.activatablePolicies.length > 0 && (
                   <span className="flex flex-wrap gap-1.5">

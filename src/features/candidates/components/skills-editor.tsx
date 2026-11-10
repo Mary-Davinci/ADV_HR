@@ -49,10 +49,13 @@ export function SkillsEditor({
   candidateId,
   skills,
   canEdit,
+  compact = false,
 }: {
   candidateId: string;
   skills: CandidateSkill[];
   canEdit: boolean;
+  /** Nessuna competenza: solo il pulsante di aggiunta. */
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const form = useForm<SkillFormInput>({ resolver: actionResolver(skillSchema), defaultValues: EMPTY });
@@ -76,6 +79,51 @@ export function SkillsEditor({
         : EMPTY,
     );
     setOpen(true);
+  }
+
+  const dialog = (
+    <FormDialog
+      open={open}
+      onOpenChange={setOpen}
+      title="Competenza"
+      description="Se la competenza esiste già a catalogo viene riutilizzata."
+      form={form}
+      onSubmit={(values) => save.mutate({ candidateId, values })}
+      isPending={save.isPending}
+    >
+      <FieldRow>
+        <TextField<SkillFormInput> name="skillName" label="Competenza" required maxLength={100} />
+        <SelectField<SkillFormInput>
+          name="category"
+          label="Categoria"
+          required
+          options={optionsOf(SKILL_CATEGORY_LABELS)}
+        />
+      </FieldRow>
+      <FieldRow>
+        <SelectField<SkillFormInput>
+          name="level"
+          label="Livello"
+          options={[1, 2, 3, 4, 5].map((level) => ({ value: String(level), label: `${level} / 5` }))}
+        />
+        <TextField<SkillFormInput> name="yearsExperience" label="Anni di esperienza" type="number" />
+      </FieldRow>
+      <CheckboxField<SkillFormInput> name="verified" label="Verificata dal recruiter" />
+      <TextareaField<SkillFormInput> name="notes" label="Note" rows={2} maxLength={500} />
+    </FormDialog>
+  );
+
+  if (compact && skills.length === 0) {
+    if (!canEdit) return null;
+    return (
+      <>
+        <Button variant="outline" size="sm" onClick={() => openEditor(null)}>
+          <Plus aria-hidden="true" />
+          Competenze
+        </Button>
+        {dialog}
+      </>
+    );
   }
 
   return (
@@ -144,35 +192,7 @@ export function SkillsEditor({
         })}
       </CardContent>
 
-      <FormDialog
-        open={open}
-        onOpenChange={setOpen}
-        title="Competenza"
-        description="Se la competenza esiste già a catalogo viene riutilizzata."
-        form={form}
-        onSubmit={(values) => save.mutate({ candidateId, values })}
-        isPending={save.isPending}
-      >
-        <FieldRow>
-          <TextField<SkillFormInput> name="skillName" label="Competenza" required maxLength={100} />
-          <SelectField<SkillFormInput>
-            name="category"
-            label="Categoria"
-            required
-            options={optionsOf(SKILL_CATEGORY_LABELS)}
-          />
-        </FieldRow>
-        <FieldRow>
-          <SelectField<SkillFormInput>
-            name="level"
-            label="Livello"
-            options={[1, 2, 3, 4, 5].map((level) => ({ value: String(level), label: `${level} / 5` }))}
-          />
-          <TextField<SkillFormInput> name="yearsExperience" label="Anni di esperienza" type="number" />
-        </FieldRow>
-        <CheckboxField<SkillFormInput> name="verified" label="Verificata dal recruiter" />
-        <TextareaField<SkillFormInput> name="notes" label="Note" rows={2} maxLength={500} />
-      </FormDialog>
+      {dialog}
     </Card>
   );
 }

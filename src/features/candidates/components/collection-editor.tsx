@@ -65,6 +65,8 @@ interface CollectionEditorProps<K extends CandidateCollectionKind> {
   kind: K;
   items: Array<CandidateCollections[K]>;
   canEdit: boolean;
+  /** Sezione vuota: solo il pulsante di aggiunta, senza card (raccolta con le altre vuote). */
+  compact?: boolean;
 }
 
 /**
@@ -76,6 +78,7 @@ export function CollectionEditor<K extends CandidateCollectionKind>({
   kind,
   items,
   canEdit,
+  compact = false,
 }: CollectionEditorProps<K>) {
   const config = COLLECTION_CONFIG[kind];
   const [editing, setEditing] = useState<{ id: string | null } | null>(null);
@@ -97,6 +100,36 @@ export function CollectionEditor<K extends CandidateCollectionKind>({
   }
 
   const headingId = `collection-${kind}`;
+  const dialog = (
+    <FormDialog
+      open={editing !== null}
+      onOpenChange={(open) => !open && setEditing(null)}
+      title={`${editing?.id ? "Modifica" : "Aggiungi"} ${config.itemLabel}`}
+      form={form}
+      onSubmit={(values) => save.mutate({ candidateId, kind, itemId: editing?.id ?? null, values })}
+      isPending={save.isPending}
+      size="lg"
+    >
+      <div className="grid gap-4 sm:grid-cols-2">
+        {config.fields.map((field) => (
+          <DescriptorField key={field.name} field={field} />
+        ))}
+      </div>
+    </FormDialog>
+  );
+
+  if (compact && items.length === 0) {
+    if (!canEdit) return null;
+    return (
+      <>
+        <Button variant="outline" size="sm" onClick={() => openEditor(null)}>
+          <Plus aria-hidden="true" />
+          {config.title}
+        </Button>
+        {dialog}
+      </>
+    );
+  }
 
   return (
     <Card role="region" aria-labelledby={headingId}>
@@ -156,22 +189,7 @@ export function CollectionEditor<K extends CandidateCollectionKind>({
           </ul>
         )}
       </CardContent>
-
-      <FormDialog
-        open={editing !== null}
-        onOpenChange={(open) => !open && setEditing(null)}
-        title={`${editing?.id ? "Modifica" : "Aggiungi"} ${config.itemLabel}`}
-        form={form}
-        onSubmit={(values) => save.mutate({ candidateId, kind, itemId: editing?.id ?? null, values })}
-        isPending={save.isPending}
-        size="lg"
-      >
-        <div className="grid gap-4 sm:grid-cols-2">
-          {config.fields.map((field) => (
-            <DescriptorField key={field.name} field={field} />
-          ))}
-        </div>
-      </FormDialog>
+      {dialog}
     </Card>
   );
 }

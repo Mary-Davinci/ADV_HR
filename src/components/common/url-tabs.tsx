@@ -32,7 +32,7 @@ export function UrlTabs({ tabs, defaultValue, label }: { tabs: UrlTab[]; default
       }}
       className="gap-4"
     >
-      <div className="-mx-1 overflow-x-auto px-1 pb-1">
+      <div className="-mx-1 overflow-x-auto overflow-y-hidden px-1 pb-1">
         <TabsList variant="line" aria-label={label} className="h-9 w-max justify-start border-b pb-0">
           {tabs.map((tab) => (
             <TabsTrigger key={tab.value} value={tab.value} className="h-9 flex-none px-3">
