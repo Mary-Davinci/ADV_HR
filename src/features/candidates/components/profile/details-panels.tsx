@@ -11,7 +11,8 @@ import {
   WORK_MODE_LABELS,
   WORK_TIME_LABELS,
 } from "@/config/labels";
-import { daysUntil, formatDate, formatDateTime, formatMonths, getAge } from "@/lib/format";
+import { needsResidencePermit } from "@/domain";
+import { daysUntil, formatDate, formatDateTime, getAge } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { CandidateProfileView } from "@/services/candidate-service";
 
@@ -41,7 +42,8 @@ function Group({ title, entries }: { title: string; entries: Entry[] }) {
 }
 
 /**
- * Dati della persona senza ripetere la colonna di sintesi (nome, contatti, nazionalità):
+ * Dati della persona senza ripetere la colonna di sintesi (nome, contatti, nazionalità, sintesi
+ * professionale, settore, esperienza e disponibilità):
  * solo i campi compilati, raggruppati; quelli mancanti sono elencati in una riga.
  */
 export function PersonalDetailsPanel({ profile, canEdit }: { profile: CandidateProfileView; canEdit: boolean }) {
@@ -59,27 +61,14 @@ export function PersonalDetailsPanel({ profile, canEdit }: { profile: CandidateP
   ]
     .filter(Boolean)
     .join(", ");
-  const permitRelevant = candidate.residencePermitStatus !== null && candidate.residencePermitStatus !== "NOT_REQUIRED";
+  // Cittadini italiani o UE: permesso, scadenza e note non vengono né mostrati né richiesti.
+  const permitApplies = needsResidencePermit(candidate);
 
   const professional: Entry[] = [
-    {
-      label: "Sintesi professionale",
-      wide: true,
-      value: data.professionalSummary && (
-        <span className="leading-relaxed whitespace-pre-line">{data.professionalSummary}</span>
-      ),
-    },
-    { label: "Settore di esperienza", value: data.experienceSector },
-    { label: "Esperienza dichiarata", value: data.experienceMonths ? formatMonths(data.experienceMonths) : null },
     {
       label: "Stato occupazionale",
       value: data.employmentStatus !== "UNKNOWN" && labelOf(EMPLOYMENT_STATUS_LABELS, data.employmentStatus),
     },
-    {
-      label: "Disponibilità",
-      value: profile.preferences.availability && labelOf(AVAILABILITY_LABELS, profile.preferences.availability),
-    },
-    { label: "Note disponibilità", wide: true, value: profile.preferences.availabilityNotes },
     {
       label: "Categoria protetta",
       value: data.protectedCategory !== "NOT_SPECIFIED" && labelOf(PROTECTED_CATEGORY_LABELS, data.protectedCategory),
@@ -100,7 +89,7 @@ export function PersonalDetailsPanel({ profile, canEdit }: { profile: CandidateP
     {
       label: "Permesso di soggiorno",
       wide: true,
-      value: (permitRelevant || candidate.residencePermitExpiresOn) && (
+      value: permitApplies && (candidate.residencePermitStatus || candidate.residencePermitExpiresOn) && (
         <span className="space-y-0.5">
           <span className="block">{labelOf(RESIDENCE_PERMIT_STATUS_LABELS, candidate.residencePermitStatus, "")}</span>
           {candidate.residencePermitExpiresOn && (
@@ -128,13 +117,11 @@ export function PersonalDetailsPanel({ profile, canEdit }: { profile: CandidateP
     },
   ];
   const missing = [
-    !data.professionalSummary && !data.experienceSector && "profilo professionale",
     !candidate.fiscalCode && "codice fiscale",
     !candidate.birthDate && "data di nascita",
     !residence && "residenza",
-    !profile.preferences.availability && "disponibilità",
     data.employmentStatus === "UNKNOWN" && "stato occupazionale",
-    candidate.residencePermitStatus === null && "permesso di soggiorno",
+    permitApplies && candidate.residencePermitStatus === null && "permesso di soggiorno",
   ].filter(Boolean);
 
   return (
@@ -151,7 +138,7 @@ export function PersonalDetailsPanel({ profile, canEdit }: { profile: CandidateP
       }
     >
       <div className="space-y-6">
-        <Group title="Profilo professionale" entries={professional} />
+        <Group title="Situazione lavorativa" entries={professional} />
         <Group title="Anagrafica e residenza" entries={personal} />
         {missing.length > 0 && (
           <p className="rounded-lg border border-dashed px-3 py-2 text-sm text-muted-foreground">

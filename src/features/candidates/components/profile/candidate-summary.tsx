@@ -3,7 +3,7 @@ import Link from "next/link";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { AVAILABILITY_LABELS, DRIVING_LICENSE_LABELS, WORK_TIME_LABELS } from "@/config/labels";
-import { getTotalExperienceMonths } from "@/domain";
+import { getTotalExperienceMonths, needsResidencePermit } from "@/domain";
 import { StageBadge } from "@/features/recruiting/components/badges";
 import { daysUntil, formatDate, formatMonths, formatSlot, formatTimeAgo, getAge, getInitials } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -87,7 +87,17 @@ export function CandidateSummary({
   );
   const facts = [
     { label: "Dove", value: place },
-    { label: "Quando", value: when },
+    {
+      label: "Disponibilità",
+      value: when && (
+        <>
+          {when}
+          {preferences.availabilityNotes && (
+            <span className="block text-xs font-normal text-muted-foreground">{preferences.availabilityNotes}</span>
+          )}
+        </>
+      ),
+    },
     { label: "Patenti", value: licenses.join(", ") },
     { label: "Certificazioni", value: profile.certifications.map((item) => item.name).join(", ") },
     { label: "Lingue", value: languages.join(", ") },
@@ -112,6 +122,11 @@ export function CandidateSummary({
             {candidate.firstName} {candidate.lastName}
           </h1>
           {role && <p className="text-sm font-medium">{role}</p>}
+          {data.professionalSummary && (
+            <p className="line-clamp-3 text-sm leading-relaxed text-muted-foreground" title={data.professionalSummary}>
+              {data.professionalSummary}
+            </p>
+          )}
           <p className="text-sm text-muted-foreground">
             {[age !== null ? `${age} anni` : null, candidate.nationality && capitalize(candidate.nationality)]
               .filter(Boolean)
@@ -218,7 +233,9 @@ export function CandidateAlerts({ profile }: { profile: CandidateProfileView }) 
   const alerts: Alert[] = [];
   const permitDays = daysUntil(candidate.residencePermitExpiresOn);
 
-  if (candidate.residencePermitStatus === "EXPIRED" || (permitDays !== null && permitDays < 0)) {
+  if (!needsResidencePermit(candidate)) {
+    // Cittadini italiani o UE: nessun avviso sul permesso.
+  } else if (candidate.residencePermitStatus === "EXPIRED" || (permitDays !== null && permitDays < 0)) {
     alerts.push({
       key: "permit",
       tone: "danger",

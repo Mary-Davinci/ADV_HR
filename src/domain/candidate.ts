@@ -89,6 +89,15 @@ export type ActivePolicyStatus = (typeof ACTIVE_POLICY_STATUSES)[number];
 export const RESIDENCE_PERMIT_STATUSES = ["NOT_REQUIRED", "VALID", "REQUESTED", "PENDING", "EXPIRED", "NONE"] as const;
 export type ResidencePermitStatus = (typeof RESIDENCE_PERMIT_STATUSES)[number];
 
+/**
+ * Il permesso di soggiorno conta solo per chi non è cittadino italiano o UE:
+ * escluso se HR lo ha indicato come non necessario o se la nazionalità è italiana.
+ */
+export function needsResidencePermit(candidate: Pick<Candidate, "nationality" | "residencePermitStatus">): boolean {
+  if (candidate.residencePermitStatus === "NOT_REQUIRED") return false;
+  return !/^\s*ital/i.test(candidate.nationality ?? "");
+}
+
 /** Da dove arriva il candidato: importato da ADV CORE, dalle piattaforme di annunci o inserito a mano. */
 export const CANDIDATE_ORIGINS = ["ADV_CORE", "INDEED", "LINKEDIN", "MANUAL", "WEBSITE"] as const;
 export type CandidateOrigin = (typeof CANDIDATE_ORIGINS)[number];
