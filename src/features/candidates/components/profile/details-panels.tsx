@@ -13,6 +13,7 @@ import { daysUntil, formatDate, formatDateTime, getAge } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { CandidateProfileView } from "@/services/candidate-service";
 
+import { CollectionEditor } from "../collection-editor";
 import { EditIdentityButton, EditProfileButton } from "../section-forms";
 
 /** Campo mostrato solo se valorizzato: i vuoti finiscono nella riga "Da completare". */
@@ -135,6 +136,29 @@ export function PersonalDetailsPanel({ profile, canEdit }: { profile: CandidateP
       <div className="space-y-6">
         <Group title="Situazione lavorativa" entries={professional} />
         <Group title="Anagrafica e residenza" entries={personal} />
+        <div className="space-y-5 border-t pt-5">
+          <CollectionEditor
+            candidateId={candidate.id}
+            kind="education"
+            items={profile.education}
+            canEdit={canEdit}
+            variant="embedded"
+          />
+          <CollectionEditor
+            candidateId={candidate.id}
+            kind="activePolicies"
+            items={profile.activePolicies}
+            canEdit={canEdit}
+            variant="embedded"
+          />
+          <CollectionEditor
+            candidateId={candidate.id}
+            kind="interests"
+            items={profile.interests}
+            canEdit={canEdit}
+            variant="embedded"
+          />
+        </div>
         {missing.length > 0 && (
           <p className="rounded-lg border border-dashed px-3 py-2 text-sm text-muted-foreground">
             <span className="font-medium text-foreground">Da completare:</span> {missing.join(", ")}.

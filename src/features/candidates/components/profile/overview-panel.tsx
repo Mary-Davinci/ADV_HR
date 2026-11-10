@@ -1,4 +1,4 @@
-import { CalendarClock, GraduationCap, Route } from "lucide-react";
+import { CalendarClock, Route } from "lucide-react";
 import Link from "next/link";
 
 import { DetailField, DetailList, DetailSection } from "@/components/common/detail-section";
@@ -153,32 +153,6 @@ export function OverviewPanel({ profile, canEdit }: { profile: CandidateProfileV
           </DetailList>
         </DetailSection>
       </div>
-
-      <DetailSection title="Formazione e altro" icon={GraduationCap}>
-        <div className="space-y-6">
-          <CollectionEditor
-            candidateId={candidate.id}
-            kind="education"
-            items={profile.education}
-            canEdit={canEdit}
-            variant="embedded"
-          />
-          <CollectionEditor
-            candidateId={candidate.id}
-            kind="activePolicies"
-            items={profile.activePolicies}
-            canEdit={canEdit}
-            variant="embedded"
-          />
-          <CollectionEditor
-            candidateId={candidate.id}
-            kind="interests"
-            items={profile.interests}
-            canEdit={canEdit}
-            variant="embedded"
-          />
-        </div>
-      </DetailSection>
     </div>
   );
 }
