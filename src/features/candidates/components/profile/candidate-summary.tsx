@@ -9,6 +9,7 @@ import { daysUntil, formatDate, formatMonths, formatSlot, formatTimeAgo, getAge,
 import { cn } from "@/lib/utils";
 import type { CandidateProfileView } from "@/services/candidate-service";
 
+import { repeatsText } from "../../lib/repeats-text";
 import { CollectionEditor } from "../collection-editor";
 import { EditPreferencesButton, EditProfileButton, EditRecruiterButton } from "../section-forms";
 import { DocumentLinks } from "./document-links";
@@ -78,6 +79,11 @@ export function CandidateSummary({
   const latest = profile.applications[0];
   const age = getAge(candidate.birthDate);
   const role = headline(profile);
+  // Sintesi uguale al ruolo con altre parole (es. settore e sintesi da ADV Core): basta il ruolo.
+  const summaryText =
+    data.professionalSummary && !(role && repeatsText(role, data.professionalSummary))
+      ? data.professionalSummary
+      : null;
   const place = [data.residencePostalCode, data.residenceCity, data.residenceProvince && `(${data.residenceProvince})`]
     .filter(Boolean)
     .join(" ");
@@ -170,9 +176,9 @@ export function CandidateSummary({
             {candidate.firstName} {candidate.lastName}
           </h1>
           {role && <p className="text-sm font-medium">{role}</p>}
-          {data.professionalSummary && (
-            <p className="line-clamp-3 text-sm leading-relaxed text-muted-foreground" title={data.professionalSummary}>
-              {data.professionalSummary}
+          {summaryText && (
+            <p className="line-clamp-3 text-sm leading-relaxed text-muted-foreground" title={summaryText}>
+              {summaryText}
             </p>
           )}
           <p className="text-sm text-muted-foreground">
