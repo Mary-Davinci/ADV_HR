@@ -1,4 +1,4 @@
-import { CalendarClock, Route } from "lucide-react";
+import { CalendarClock, GraduationCap, Route } from "lucide-react";
 import Link from "next/link";
 
 import { DetailField, DetailList, DetailSection } from "@/components/common/detail-section";
@@ -21,13 +21,6 @@ export function OverviewPanel({ profile, canEdit }: { profile: CandidateProfileV
       ? profile.nextInterview
       : null;
   const hasCertificates = profile.documents.some((document) => document.type === "CERTIFICATION");
-  const emptySections = [
-    profile.experiences,
-    profile.skills,
-    profile.languages,
-    profile.drivingLicenses,
-    hasCertificates ? [true] : profile.certifications,
-  ].filter((items) => items.length === 0).length;
 
   return (
     <div className="min-w-0 space-y-6">
@@ -62,17 +55,8 @@ export function OverviewPanel({ profile, canEdit }: { profile: CandidateProfileV
         )}
 
         <PersonalDetailsPanel profile={profile} canEdit={canEdit} />
-        {profile.experiences.length > 0 && (
-          <CollectionEditor
-            candidateId={candidate.id}
-            kind="experiences"
-            items={profile.experiences}
-            canEdit={canEdit}
-          />
-        )}
-        {profile.skills.length > 0 && (
-          <SkillsEditor candidateId={candidate.id} skills={profile.skills} canEdit={canEdit} />
-        )}
+        <CollectionEditor candidateId={candidate.id} kind="experiences" items={profile.experiences} canEdit={canEdit} />
+        <SkillsEditor candidateId={candidate.id} skills={profile.skills} canEdit={canEdit} />
         {(profile.languages.length > 0 || profile.drivingLicenses.length > 0) && (
           <div className="grid gap-6 xl:grid-cols-2">
             {profile.languages.length > 0 && (
@@ -108,47 +92,6 @@ export function OverviewPanel({ profile, canEdit }: { profile: CandidateProfileV
               </div>
             )}
           </div>
-        )}
-        {canEdit && emptySections > 0 && (
-          <section
-            aria-label="Sezioni da compilare"
-            className="flex flex-col gap-3 rounded-xl border border-dashed p-4 sm:flex-row sm:items-center"
-          >
-            <p className="text-sm text-muted-foreground sm:mr-2">Aggiungi al profilo:</p>
-            <div className="flex flex-wrap gap-2">
-              <CollectionEditor
-                candidateId={candidate.id}
-                kind="experiences"
-                items={profile.experiences}
-                canEdit={canEdit}
-                compact
-              />
-              <SkillsEditor candidateId={candidate.id} skills={profile.skills} canEdit={canEdit} compact />
-              <CollectionEditor
-                candidateId={candidate.id}
-                kind="languages"
-                items={profile.languages}
-                canEdit={canEdit}
-                compact
-              />
-              <CollectionEditor
-                candidateId={candidate.id}
-                kind="drivingLicenses"
-                items={profile.drivingLicenses}
-                canEdit={canEdit}
-                compact
-              />
-              {!hasCertificates && (
-                <CollectionEditor
-                  candidateId={candidate.id}
-                  kind="certifications"
-                  items={profile.certifications}
-                  canEdit={canEdit}
-                  compact
-                />
-              )}
-            </div>
-          </section>
         )}
       </div>
 
@@ -210,6 +153,32 @@ export function OverviewPanel({ profile, canEdit }: { profile: CandidateProfileV
           </DetailList>
         </DetailSection>
       </div>
+
+      <DetailSection title="Formazione e altro" icon={GraduationCap}>
+        <div className="space-y-6">
+          <CollectionEditor
+            candidateId={candidate.id}
+            kind="education"
+            items={profile.education}
+            canEdit={canEdit}
+            variant="embedded"
+          />
+          <CollectionEditor
+            candidateId={candidate.id}
+            kind="activePolicies"
+            items={profile.activePolicies}
+            canEdit={canEdit}
+            variant="embedded"
+          />
+          <CollectionEditor
+            candidateId={candidate.id}
+            kind="interests"
+            items={profile.interests}
+            canEdit={canEdit}
+            variant="embedded"
+          />
+        </div>
+      </DetailSection>
     </div>
   );
 }

@@ -8,11 +8,9 @@ import { ButtonLink } from "@/components/common/button-link";
 import { Timeline } from "@/components/common/timeline";
 import { UrlTabs } from "@/components/common/url-tabs";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { CollectionEditor } from "@/features/candidates/components/collection-editor";
 import { LogContactButton } from "@/features/candidates/components/log-contact-button";
 import { ApplicationsPanel } from "@/features/candidates/components/profile/applications-panel";
 import { CandidateAlerts, CandidateSummary } from "@/features/candidates/components/profile/candidate-summary";
-import { PreferencesPanel } from "@/features/candidates/components/profile/details-panels";
 import { OverviewPanel } from "@/features/candidates/components/profile/overview-panel";
 import {
   RecommendedSelections,
@@ -76,7 +74,7 @@ export default async function CandidatePage({ params, searchParams }: PageProps<
     typeof tab === "string"
       ? tab === "interviews"
         ? "applications"
-        : ["profile", "experience", "skills"].includes(tab)
+        : ["profile", "experience", "skills", "education", "preferences"].includes(tab)
           ? "overview"
           : tab
       : "overview";
@@ -118,21 +116,6 @@ export default async function CandidatePage({ params, searchParams }: PageProps<
       label: "Panoramica",
       content: <OverviewPanel profile={profile} canEdit={canEdit} />,
     },
-    {
-      value: "education",
-      label: "Formazione e altro",
-      count: profile.education.length,
-      content: (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div className="lg:col-span-2">
-            <CollectionEditor candidateId={id} kind="education" items={profile.education} canEdit={canEdit} />
-          </div>
-          <CollectionEditor candidateId={id} kind="activePolicies" items={profile.activePolicies} canEdit={canEdit} />
-          <CollectionEditor candidateId={id} kind="interests" items={profile.interests} canEdit={canEdit} />
-        </div>
-      ),
-    },
-    { value: "preferences", label: "Preferenze", content: <PreferencesPanel profile={profile} canEdit={canEdit} /> },
     {
       value: "applications",
       label: "Candidature",

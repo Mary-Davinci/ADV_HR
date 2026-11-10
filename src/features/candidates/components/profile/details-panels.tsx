@@ -1,24 +1,19 @@
-import { IdCard, Settings2 } from "lucide-react";
+import { IdCard } from "lucide-react";
 
 import { DetailField, DetailList, DetailSection } from "@/components/common/detail-section";
 import {
-  AVAILABILITY_LABELS,
   EMPLOYMENT_STATUS_LABELS,
   GENDER_LABELS,
   labelOf,
   PROTECTED_CATEGORY_LABELS,
   RESIDENCE_PERMIT_STATUS_LABELS,
-  WORK_MODE_LABELS,
-  WORK_TIME_LABELS,
 } from "@/config/labels";
 import { needsResidencePermit } from "@/domain";
 import { daysUntil, formatDate, formatDateTime, getAge } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { CandidateProfileView } from "@/services/candidate-service";
 
-import { EditIdentityButton, EditPreferencesButton, EditProfileButton } from "../section-forms";
-
-const yesNo = (value: boolean | null) => (value === null ? null : value ? "Sì" : "No");
+import { EditIdentityButton, EditProfileButton } from "../section-forms";
 
 /** Campo mostrato solo se valorizzato: i vuoti finiscono nella riga "Da completare". */
 type Entry = { label: string; value: React.ReactNode; wide?: boolean };
@@ -159,36 +154,6 @@ export function PersonalDetailsPanel({ profile, canEdit }: { profile: CandidateP
           {data.lastReviewedAt && ` · ultima revisione ${formatDateTime(data.lastReviewedAt)}`}
         </p>
       </div>
-    </DetailSection>
-  );
-}
-
-export function PreferencesPanel({ profile, canEdit }: { profile: CandidateProfileView; canEdit: boolean }) {
-  const preferences = profile.preferences;
-  return (
-    <DetailSection
-      title="Preferenze professionali"
-      icon={Settings2}
-      action={canEdit ? <EditPreferencesButton preferences={preferences} /> : undefined}
-    >
-      <DetailList className="lg:grid-cols-3">
-        <DetailField label="Disponibilità">{labelOf(AVAILABILITY_LABELS, preferences.availability, "")}</DetailField>
-        <DetailField label="Modalità di lavoro">
-          {labelOf(WORK_MODE_LABELS, preferences.desiredWorkMode, "")}
-        </DetailField>
-        <DetailField label="Orario">{labelOf(WORK_TIME_LABELS, preferences.desiredWorkTime, "")}</DetailField>
-        <DetailField label="Tipologia contratto">
-          {labelOf(WORK_TIME_LABELS, preferences.desiredEmploymentType, "")}
-        </DetailField>
-        <DetailField label="Disponibile al trasferimento">{yesNo(preferences.willingToRelocate)}</DetailField>
-        <DetailField label="Disponibile a trasferte">{yesNo(preferences.willingToTravel)}</DetailField>
-        <DetailField label="Sedi preferite" className="sm:col-span-2 lg:col-span-3">
-          {preferences.preferredLocations.join(", ")}
-        </DetailField>
-        <DetailField label="Note sulla disponibilità" className="sm:col-span-2 lg:col-span-3">
-          {preferences.availabilityNotes}
-        </DetailField>
-      </DetailList>
     </DetailSection>
   );
 }

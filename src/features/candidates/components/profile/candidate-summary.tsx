@@ -9,7 +9,8 @@ import { daysUntil, formatDate, formatMonths, formatSlot, formatTimeAgo, getAge,
 import { cn } from "@/lib/utils";
 import type { CandidateProfileView } from "@/services/candidate-service";
 
-import { EditRecruiterButton } from "../section-forms";
+import { CollectionEditor } from "../collection-editor";
+import { EditPreferencesButton, EditProfileButton, EditRecruiterButton } from "../section-forms";
 import { DocumentLinks } from "./document-links";
 
 const capitalize = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
@@ -42,11 +43,18 @@ function headline(profile: CandidateProfileView): string | null {
   return [role, months ? formatMonths(months) : null].filter(Boolean).join(" · ") || null;
 }
 
-function Fact({ label, children }: { label: string; children: React.ReactNode }) {
+/** Riga sempre visibile: se il dato manca davvero lo dice, con l'azione per inserirlo accanto. */
+function Fact({ label, children, action }: { label: string; children: React.ReactNode; action?: React.ReactNode }) {
+  const empty = children === null || children === undefined || children === "" || children === false;
   return (
     <div className="flex items-baseline justify-between gap-4">
       <dt className="shrink-0 text-xs text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 text-right text-sm font-medium">{children}</dd>
+      <dd className="flex min-w-0 items-baseline justify-end gap-1 text-right text-sm">
+        <span className={cn("min-w-0", empty ? "text-muted-foreground" : "font-medium")}>
+          {empty ? "Non presente nella scheda" : children}
+        </span>
+        {action}
+      </dd>
     </div>
   );
 }
@@ -86,7 +94,11 @@ export function CandidateSummary({
     (item) => `${item.language} ${item.level === "NATIVE" ? "madrelingua" : item.level}`,
   );
   const facts = [
-    { label: "Dove", value: place },
+    {
+      label: "Dove",
+      value: place,
+      action: canEdit && <EditProfileButton profile={data} compact />,
+    },
     {
       label: "Disponibilità",
       value: when && (
@@ -97,12 +109,48 @@ export function CandidateSummary({
           )}
         </>
       ),
+      action: canEdit && <EditPreferencesButton preferences={preferences} compact />,
     },
-    { label: "Patenti", value: licenses.join(", ") },
-    { label: "Certificazioni", value: profile.certifications.map((item) => item.name).join(", ") },
-    { label: "Lingue", value: languages.join(", ") },
+    {
+      label: "Patenti",
+      value: licenses.join(", "),
+      action: (
+        <CollectionEditor
+          candidateId={candidate.id}
+          kind="drivingLicenses"
+          items={profile.drivingLicenses}
+          canEdit={canEdit}
+          variant="add"
+        />
+      ),
+    },
+    {
+      label: "Certificazioni",
+      value: profile.certifications.map((item) => item.name).join(", "),
+      action: (
+        <CollectionEditor
+          candidateId={candidate.id}
+          kind="certifications"
+          items={profile.certifications}
+          canEdit={canEdit}
+          variant="add"
+        />
+      ),
+    },
+    {
+      label: "Lingue",
+      value: languages.join(", "),
+      action: (
+        <CollectionEditor
+          candidateId={candidate.id}
+          kind="languages"
+          items={profile.languages}
+          canEdit={canEdit}
+          variant="add"
+        />
+      ),
+    },
   ];
-  const missingFacts = facts.filter((fact) => !fact.value).map((fact) => fact.label.toLowerCase());
 
   return (
     <aside
@@ -146,29 +194,11 @@ export function CandidateSummary({
       </div>
 
       <dl className="relative flex flex-col gap-3 border-t border-[#ecdfc3] pt-4 dark:border-border">
-        {facts
-          .filter((fact) => fact.value)
-          .map((fact) => (
-            <Fact key={fact.label} label={fact.label}>
-              {fact.value}
-            </Fact>
-          ))}
-        {missingFacts.length > 0 && (
-          <p className="text-xs text-muted-foreground">
-            Non indicati: {missingFacts.join(", ")}
-            {canEdit && (
-              <>
-                {" · "}
-                <a
-                  href="?tab=overview#section-dati-personali"
-                  className="font-medium text-foreground underline-offset-4 hover:underline"
-                >
-                  completa
-                </a>
-              </>
-            )}
-          </p>
-        )}
+        {facts.map((fact) => (
+          <Fact key={fact.label} label={fact.label} action={fact.action}>
+            {fact.value}
+          </Fact>
+        ))}
         <div className="flex items-center justify-between gap-4">
           <dt className="shrink-0 text-xs text-muted-foreground">Recruiter</dt>
           <dd className="flex min-w-0 items-center gap-1 text-right text-sm font-medium">

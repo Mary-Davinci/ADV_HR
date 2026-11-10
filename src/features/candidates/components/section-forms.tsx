@@ -219,7 +219,15 @@ export function EditTrackingButton({ candidate }: { candidate: Candidate }) {
   );
 }
 
-export function EditProfileButton({ profile, label }: { profile: CandidateProfile; label?: string }) {
+export function EditProfileButton({
+  profile,
+  label,
+  compact,
+}: {
+  profile: CandidateProfile;
+  label?: string;
+  compact?: boolean;
+}) {
   const initialValues: ProfileFormInput = {
     residenceAddress: toFormValue(profile.residenceAddress),
     residencePostalCode: toFormValue(profile.residencePostalCode),
@@ -243,6 +251,7 @@ export function EditProfileButton({ profile, label }: { profile: CandidateProfil
       initialValues={initialValues}
       action={updateProfileAction}
       label={label}
+      compact={compact}
     >
       <TextareaField<ProfileFormInput>
         name="professionalSummary"
@@ -289,7 +298,14 @@ export function EditProfileButton({ profile, label }: { profile: CandidateProfil
   );
 }
 
-export function EditPreferencesButton({ preferences }: { preferences: CandidatePreferences }) {
+export function EditPreferencesButton({
+  preferences,
+  compact,
+}: {
+  preferences: CandidatePreferences;
+  /** Solo icona, accanto alla disponibilità nella colonna di sintesi. */
+  compact?: boolean;
+}) {
   const initialValues: PreferencesFormInput = {
     availability: preferences.availability ?? "",
     desiredEmploymentType: preferences.desiredEmploymentType ?? "",
@@ -303,10 +319,11 @@ export function EditPreferencesButton({ preferences }: { preferences: CandidateP
   return (
     <EditSectionButton
       candidateId={preferences.candidateId}
-      title="Modifica preferenze"
+      title="Disponibilità e preferenze"
       schema={preferencesSchema}
       initialValues={initialValues}
       action={updatePreferencesAction}
+      compact={compact}
     >
       <FieldRow>
         <SelectField<PreferencesFormInput>

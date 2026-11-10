@@ -65,8 +65,11 @@ interface CollectionEditorProps<K extends CandidateCollectionKind> {
   kind: K;
   items: Array<CandidateCollections[K]>;
   canEdit: boolean;
-  /** Sezione vuota: solo il pulsante di aggiunta, senza card (raccolta con le altre vuote). */
-  compact?: boolean;
+  /**
+   * "card" (predefinito) sezione completa; "add" solo il pulsante + per aggiungere (es. accanto
+   * a un dato della colonna di sintesi); "embedded" sezione senza card, dentro un'altra card.
+   */
+  variant?: "card" | "add" | "embedded";
 }
 
 /**
@@ -78,7 +81,7 @@ export function CollectionEditor<K extends CandidateCollectionKind>({
   kind,
   items,
   canEdit,
-  compact = false,
+  variant = "card",
 }: CollectionEditorProps<K>) {
   const config = COLLECTION_CONFIG[kind];
   const [editing, setEditing] = useState<{ id: string | null } | null>(null);
@@ -118,16 +121,85 @@ export function CollectionEditor<K extends CandidateCollectionKind>({
     </FormDialog>
   );
 
-  if (compact && items.length === 0) {
+  if (variant === "add") {
     if (!canEdit) return null;
     return (
       <>
-        <Button variant="outline" size="sm" onClick={() => openEditor(null)}>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          aria-label={`Aggiungi ${config.itemLabel}`}
+          title={`Aggiungi ${config.itemLabel}`}
+          onClick={() => openEditor(null)}
+        >
           <Plus aria-hidden="true" />
-          {config.title}
         </Button>
         {dialog}
       </>
+    );
+  }
+
+  const addButton = canEdit && (
+    <Button variant="outline" size="sm" onClick={() => openEditor(null)}>
+      <Plus aria-hidden="true" />
+      Aggiungi
+    </Button>
+  );
+  const list =
+    items.length === 0 ? (
+      <p className="text-sm text-muted-foreground">{config.emptyText}</p>
+    ) : (
+      <ul className="divide-y">
+        {items.map((item) => {
+          const summary = config.summary(item);
+          const id = (item as { id: string }).id;
+          return (
+            <li key={id} className="flex items-start justify-between gap-3 py-3 first:pt-0 last:pb-0">
+              <div className="min-w-0 space-y-0.5">
+                <p className="text-sm font-medium">{summary.title}</p>
+                {summary.subtitle && <p className="text-sm text-muted-foreground">{summary.subtitle}</p>}
+                {summary.meta && <p className="text-xs text-muted-foreground">{summary.meta}</p>}
+              </div>
+              {canEdit && (
+                <div className="flex shrink-0 gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`Modifica ${config.itemLabel}: ${summary.title}`}
+                    onClick={() => openEditor(item)}
+                  >
+                    <Pencil aria-hidden="true" />
+                  </Button>
+                  <ConfirmButton
+                    size="icon-sm"
+                    aria-label={`Elimina ${config.itemLabel}: ${summary.title}`}
+                    title={`Eliminare ${config.itemLabel}?`}
+                    description={`"${summary.title}" verrà rimosso dal profilo. L'operazione resta tracciata nella timeline.`}
+                    confirmLabel="Elimina"
+                    onConfirm={() => remove.mutateAsync({ candidateId, kind, itemId: id })}
+                  >
+                    <Trash2 aria-hidden="true" />
+                  </ConfirmButton>
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    );
+
+  if (variant === "embedded") {
+    return (
+      <section aria-labelledby={headingId} className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h3 id={headingId} className="text-sm font-medium">
+            {config.title}
+          </h3>
+          {addButton}
+        </div>
+        {list}
+        {dialog}
+      </section>
     );
   }
 
@@ -137,58 +209,9 @@ export function CollectionEditor<K extends CandidateCollectionKind>({
         <h3 id={headingId} className="text-base leading-snug font-medium">
           {config.title}
         </h3>
-        {canEdit && (
-          <CardAction>
-            <Button variant="outline" size="sm" onClick={() => openEditor(null)}>
-              <Plus aria-hidden="true" />
-              Aggiungi
-            </Button>
-          </CardAction>
-        )}
+        {addButton && <CardAction>{addButton}</CardAction>}
       </CardHeader>
-      <CardContent>
-        {items.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{config.emptyText}</p>
-        ) : (
-          <ul className="divide-y">
-            {items.map((item) => {
-              const summary = config.summary(item);
-              const id = (item as { id: string }).id;
-              return (
-                <li key={id} className="flex items-start justify-between gap-3 py-3 first:pt-0 last:pb-0">
-                  <div className="min-w-0 space-y-0.5">
-                    <p className="text-sm font-medium">{summary.title}</p>
-                    {summary.subtitle && <p className="text-sm text-muted-foreground">{summary.subtitle}</p>}
-                    {summary.meta && <p className="text-xs text-muted-foreground">{summary.meta}</p>}
-                  </div>
-                  {canEdit && (
-                    <div className="flex shrink-0 gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={`Modifica ${config.itemLabel}: ${summary.title}`}
-                        onClick={() => openEditor(item)}
-                      >
-                        <Pencil aria-hidden="true" />
-                      </Button>
-                      <ConfirmButton
-                        size="icon-sm"
-                        aria-label={`Elimina ${config.itemLabel}: ${summary.title}`}
-                        title={`Eliminare ${config.itemLabel}?`}
-                        description={`"${summary.title}" verrà rimosso dal profilo. L'operazione resta tracciata nella timeline.`}
-                        confirmLabel="Elimina"
-                        onConfirm={() => remove.mutateAsync({ candidateId, kind, itemId: id })}
-                      >
-                        <Trash2 aria-hidden="true" />
-                      </ConfirmButton>
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </CardContent>
+      <CardContent>{list}</CardContent>
       {dialog}
     </Card>
   );
