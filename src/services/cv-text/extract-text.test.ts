@@ -5,15 +5,18 @@ import { describe, expect, it } from "vitest";
 
 import { MAX_DOCUMENT_SIZE_BYTES } from "@/domain/document";
 
-import { extractCvText, MAX_DOCX_XML_BYTES } from "./extract-text";
+import { extractCvText, extractPreviewText, MAX_DOCX_XML_BYTES } from "./extract-text";
 
 const DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const WORDS =
   "Esperienza professionale gestione clienti sviluppo software analisi dati coordinamento progetti formazione personale comunicazione aziendale ricerca selezione candidati competenze organizzative avanzate";
 
 /** Minimal ZIP with a central directory, including optionally deceptive size metadata. */
-function docx(xml: string, options: { declaredSize?: number; stored?: boolean; encrypted?: boolean } = {}): Buffer {
-  const name = Buffer.from("word/document.xml");
+function docx(
+  xml: string,
+  options: { declaredSize?: number; stored?: boolean; encrypted?: boolean; entry?: string } = {},
+): Buffer {
+  const name = Buffer.from(options.entry ?? "word/document.xml");
   const raw = Buffer.from(xml);
   const compressed = options.stored ? raw : deflateRawSync(raw);
   const local = Buffer.alloc(30);
@@ -37,6 +40,25 @@ function docx(xml: string, options: { declaredSize?: number; stored?: boolean; e
   end.writeUInt32LE(local.length + name.length + compressed.length, 16);
   return Buffer.concat([local, name, compressed, central, name, end]);
 }
+
+describe("document preview text", () => {
+  const ODT = "application/vnd.oasis.opendocument.text";
+
+  it("shows short Word and ODT documents, keeping paragraphs", () => {
+    expect(extractPreviewText(docx("<w:p>Scheda di valutazione</w:p><w:p>Esito: idoneo</w:p>"), DOCX)).toEqual({
+      status: "OK",
+      text: "Scheda di valutazione\nEsito: idoneo",
+    });
+    const odt = docx("<text:h>Titolo</text:h><text:p>Riga<text:tab/>uno &amp; due</text:p>", { entry: "content.xml" });
+    expect(extractPreviewText(odt, ODT)).toEqual({ status: "OK", text: "Titolo\nRiga uno & due" });
+  });
+
+  it("refuses other formats and malformed files", () => {
+    expect(extractPreviewText(Buffer.from("x"), "application/msword").status).toBe("UNSUPPORTED");
+    expect(extractPreviewText(Buffer.from("not a zip"), DOCX).status).toBe("FAILED");
+    expect(extractPreviewText(docx("<w:p>testo</w:p>"), ODT).status).toBe("FAILED");
+  });
+});
 
 describe("CV extraction security", () => {
   it("handles malformed markup and long Unicode whitespace without quadratic backtracking", async () => {

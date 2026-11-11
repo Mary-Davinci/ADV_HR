@@ -39,6 +39,25 @@ export interface DocumentMetadata {
   createdAt: Date;
 }
 
+/** Formati che il browser mostra da solo in una nuova scheda (`?view=1`). */
+export const BROWSER_VIEWABLE_MIME_TYPES: readonly string[] = [
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "text/plain",
+];
+/** Formati Word/ODT: anteprima del testo nella pagina del gestionale. */
+export const TEXT_PREVIEW_MIME_TYPES: readonly string[] = [
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.oasis.opendocument.text",
+];
+
+/** Dove porta il nome del file: anteprima nel browser, pagina di anteprima del testo o download. */
+export function documentPreviewHref(document: Pick<DocumentMetadata, "id" | "mimeType">): string {
+  if (BROWSER_VIEWABLE_MIME_TYPES.includes(document.mimeType)) return `/api/documents/${document.id}?view=1`;
+  return `/documents/${document.id}`;
+}
+
 /** Whitelist dei formati accettati in upload. */
 export const ALLOWED_DOCUMENT_MIME_TYPES: Record<string, readonly string[]> = {
   "application/pdf": [".pdf"],

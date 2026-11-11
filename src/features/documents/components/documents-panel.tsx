@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, FileText, Loader2, Trash2, Upload } from "lucide-react";
+import { Download, Eye, FileText, Loader2, Trash2, Upload } from "lucide-react";
 import { useId, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -9,7 +9,7 @@ import { FilterSelect } from "@/components/common/filter-select";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { DOCUMENT_PROCESSING_LABELS, DOCUMENT_TYPE_LABELS, optionsOf } from "@/config/labels";
-import { ALLOWED_DOCUMENT_MIME_TYPES, type DocumentMetadata, type DocumentType } from "@/domain";
+import { ALLOWED_DOCUMENT_MIME_TYPES, documentPreviewHref, type DocumentMetadata, type DocumentType } from "@/domain";
 import { useActionMutation } from "@/hooks/use-action-mutation";
 import { formatDateTime, formatFileSize } from "@/lib/format";
 
@@ -122,9 +122,15 @@ export function DocumentsPanel({
                 <div className="flex min-w-0 items-start gap-3">
                   <FileText aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium" title={document.filename}>
+                    <a
+                      href={documentPreviewHref(document)}
+                      target="_blank"
+                      rel="noopener"
+                      title={`Apri l'anteprima di ${document.filename}`}
+                      className="block truncate text-sm font-medium underline-offset-4 hover:underline"
+                    >
                       {document.filename}
-                    </p>
+                    </a>
                     <p className="text-xs text-muted-foreground">
                       {DOCUMENT_TYPE_LABELS[document.type]} · {formatFileSize(document.sizeBytes)} ·{" "}
                       {formatDateTime(document.createdAt)}
@@ -135,6 +141,16 @@ export function DocumentsPanel({
                   </div>
                 </div>
                 <div className="flex shrink-0 gap-1">
+                  <a
+                    href={documentPreviewHref(document)}
+                    target="_blank"
+                    rel="noopener"
+                    aria-label={`Anteprima di ${document.filename}`}
+                    title="Anteprima"
+                    className={buttonVariants({ variant: "ghost", size: "icon-sm" })}
+                  >
+                    <Eye aria-hidden="true" />
+                  </a>
                   {/* Link reale (ruolo "link"): il download passa dalla route protetta. */}
                   <a
                     href={`/api/documents/${document.id}`}

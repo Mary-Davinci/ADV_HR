@@ -151,6 +151,42 @@ function docxText(bytes: Uint8Array): string {
     );
 }
 
+function odtText(bytes: Uint8Array): string {
+  const xml = readZipEntry(bytes, "content.xml");
+  if (!xml) throw new Error("ODT senza content.xml");
+  return Buffer.from(xml)
+    .toString("utf8")
+    .replace(/<text:(tab|s)\/>/g, " ")
+    .replace(/<text:line-break\/>/g, "\n")
+    .replace(/<\/text:(p|h)>/g, "\n")
+    .replace(/<[^<>]*>/g, "")
+    .replace(
+      /&(amp|lt|gt|quot|apos);/g,
+      (_, entity: string) => ({ amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" })[entity]!,
+    );
+}
+
+/**
+ * Testo per l'anteprima di un documento Word/ODT nel gestionale: stessi limiti di sicurezza
+ * dell'estrazione dei CV, ma senza soglia di parole (anche un documento breve va mostrato).
+ */
+export function extractPreviewText(bytes: Uint8Array, mimeType: string): ExtractedText {
+  try {
+    if (!bytes.byteLength || bytes.byteLength > MAX_DOCUMENT_SIZE_BYTES) return { status: "FAILED", text: "" };
+    const raw =
+      mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        ? docxText(bytes)
+        : mimeType === "application/vnd.oasis.opendocument.text"
+          ? odtText(bytes)
+          : null;
+    if (raw === null) return { status: "UNSUPPORTED", text: "" };
+    const text = normalize(raw);
+    return { status: text ? "OK" : "EMPTY", text };
+  } catch {
+    return { status: "FAILED", text: "" };
+  }
+}
+
 export async function extractCvText(bytes: Uint8Array, mimeType: string): Promise<ExtractedText> {
   try {
     if (!bytes.byteLength || bytes.byteLength > MAX_DOCUMENT_SIZE_BYTES) return { status: "FAILED", text: "" };
