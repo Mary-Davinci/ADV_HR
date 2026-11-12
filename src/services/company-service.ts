@@ -1,4 +1,5 @@
 import type { EntityId } from "@/domain";
+import { cancelScheduledInterviews } from "./recruiting-lifecycle";
 import { assertCan } from "@/lib/auth/permissions";
 import type {
   CompanyInput,
@@ -10,6 +11,7 @@ import type {
 
 import { changedFields, NotFoundError, nowOf, recordEvent, type ServiceContext } from "./context";
 import { positionKeywords } from "./matching/position-keywords";
+import type { PositionMatchFilters } from "@/domain/position-screening";
 
 /** Candidati compatibili mostrati in una selezione (i più pertinenti per primi). */
 const COMPATIBLE_CANDIDATES_LIMIT = 100;
@@ -29,6 +31,7 @@ export async function selectionSearchProfile(store: ServiceContext["store"], sel
   const keywords = positionKeywords({
     titles: [selection.selection.title, jobDescription?.title],
     requirements: [jobDescription?.requirements, jobDescription?.duties],
+    summary: jobDescription?.summary,
     places: [company?.city, jobDescription?.locationCity, selection.companyName],
   });
   return { selection, keywords, jobProvince: jobDescription?.locationProvince ?? company?.province ?? null };
@@ -141,20 +144,22 @@ export function createSelectionService(context: ServiceContext) {
      * selezione e della job description) trovate nei dati professionali e nei CV.
      * Il sistema propone, HR decide chi aggiungere.
      */
-    async compatibleCandidates(id: EntityId) {
+    async compatibleCandidates(id: EntityId, filters: PositionMatchFilters = {}) {
       assertCan(actor, "selection.read");
       assertCan(actor, "candidate.read");
       const profile = await selectionSearchProfile(store, id);
       if (!profile) return null;
       const { keywords, jobProvince } = profile;
-      const { total, items } = await store.candidates.matchPosition({
+      const { total, items, facets } = await store.candidates.matchPosition({
         roleKeywords: keywords.role,
         bonusKeywords: keywords.bonus,
+        screening: keywords.screening,
+        filters,
         selectionId: id,
         jobProvince,
         limit: COMPATIBLE_CANDIDATES_LIMIT,
       });
-      return { keywords, total, items, jobProvince };
+      return { keywords, total, items, facets, filters, jobProvince };
     },
 
     async create(input: SelectionInput): Promise<{ id: EntityId }> {
@@ -200,6 +205,31 @@ export function createSelectionService(context: ServiceContext) {
       };
       await store.transaction(async (repos) => {
         await repos.selections.update(id, values);
+        if (["CLOSED", "ARCHIVED"].includes(input.status)) {
+          for (const view of await repos.applications.list({ selectionId: id })) {
+            await cancelScheduledInterviews(repos, actor, view);
+            if (!view.application.closedAt) {
+              await repos.applications.updateStage(view.application.id, view.stage.id, values.closedAt ?? now);
+              await recordEvent(repos, actor, {
+                activity: {
+                  entityType: "APPLICATION",
+                  entityId: view.application.id,
+                  action: "STATUS_CHANGED",
+                  candidateId: view.candidate.id,
+                  selectionId: id,
+                  companyId: before.selection.companyId,
+                  metadata: { reason: "SELECTION_CLOSED" },
+                },
+                audit: {
+                  entityType: "APPLICATION",
+                  entityId: view.application.id,
+                  action: "UPDATE",
+                  changes: { reason: "SELECTION_CLOSED" },
+                },
+              });
+            }
+          }
+        }
         const statusChanged = before.selection.status !== input.status;
         await recordEvent(repos, actor, {
           activity: {

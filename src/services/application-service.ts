@@ -13,6 +13,7 @@ import type { ApplicationView, Repositories } from "@/repositories/types";
 
 import { ConflictError, NotFoundError, nowOf, recordEvent, type ServiceContext } from "./context";
 import { insertApplicationEvaluation } from "./application-evaluation";
+import { assertApplicationOpen, cancelScheduledInterviews } from "./recruiting-lifecycle";
 
 function contextOf(view: ApplicationView) {
   return { candidateId: view.candidate.id, selectionId: view.selection.id, companyId: view.company.id };
@@ -32,7 +33,7 @@ export function createApplicationService(context: ServiceContext) {
     view: ApplicationView,
     input: { result: EvaluationResult; reason: string | null; notes: string | null; interviewId?: EntityId | null },
   ) {
-    return insertApplicationEvaluation(repos, actor, view, input);
+    return insertApplicationEvaluation(repos, actor, view, input, nowOf(context));
   }
 
   const service = {
@@ -181,6 +182,7 @@ export function createApplicationService(context: ServiceContext) {
       await store.transaction(async (repos) => {
         const view = await requireView(repos, applicationId);
         const target = await repos.stages.getById(input.stageId);
+        assertApplicationOpen(view);
         if (!target || !target.active) throw new NotFoundError("Stage non valido.");
         if (target.id === view.stage.id) return;
 
@@ -211,8 +213,13 @@ export function createApplicationService(context: ServiceContext) {
           },
         });
 
+        if (target.isTerminal) await cancelScheduledInterviews(repos, actor, view);
         if (isRejection) {
-          await insertEvaluation(repos, view, { result: "NOT_SUITABLE", reason: input.reason ?? null, notes: null });
+          await insertEvaluation(
+            repos,
+            { ...view, stage: target },
+            { result: "NOT_SUITABLE", reason: input.reason ?? null, notes: null },
+          );
         }
       });
     },
@@ -225,6 +232,7 @@ export function createApplicationService(context: ServiceContext) {
       assertValidEvaluation(input);
       await store.transaction(async (repos) => {
         const view = await requireView(repos, applicationId);
+        assertApplicationOpen(view);
         await insertEvaluation(repos, view, input);
       });
     },

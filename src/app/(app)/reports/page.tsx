@@ -106,16 +106,18 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
           description="Stato della candidatura più recente di ciascun candidato (situazione attuale)."
         >
           <CountList
+            emptyText="Nessun candidato con una candidatura registrata."
             items={report.candidatesByStage.map((row) => ({ key: row.code, label: row.label, count: row.count }))}
           />
         </ReportCard>
-        <ReportCard title="Candidature per stage" description={`Candidature create ${periodLabel}.`}>
+        <ReportCard title="Candidature per fase" description={`Candidature create ${periodLabel}.`}>
           <CountList
             items={report.applicationsByStage.map((row) => ({ key: row.code, label: row.label, count: row.count }))}
           />
         </ReportCard>
         <ReportCard title="Selezioni per stato" description="Situazione attuale di tutte le selezioni.">
           <CountList
+            emptyText="Nessuna selezione registrata."
             items={report.selectionsByStatus.map((row) => ({
               key: row.status,
               label: labelOf(SELECTION_STATUS_LABELS, row.status as keyof typeof SELECTION_STATUS_LABELS, row.status),

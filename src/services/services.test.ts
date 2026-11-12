@@ -40,6 +40,25 @@ describe("services", () => {
     return view!;
   }
 
+  async function reportApplication(lastName: string) {
+    const original = await applicationOf(lastName);
+    const selection = await testDb.store.selections.create({
+      companyId: original.company.id,
+      title: "Test report",
+      status: "OPEN",
+      openedAt: NOW,
+      closedAt: null,
+      createdBy: actors.admin.id,
+    });
+    const { id } = await createApplicationService(ctx(actors.admin)).create({
+      candidateId: original.candidate.id,
+      selectionId: selection.id,
+      recruiterId: null,
+      source: "MANUAL",
+    });
+    return (await testDb.store.applications.getView(id))!;
+  }
+
   async function countRows(table: string, where = sql`true`): Promise<number> {
     const result = await testDb.db.execute(sql`SELECT count(*)::int AS c FROM ${sql.identifier(table)} WHERE ${where}`);
     return Number((result as { rows: Array<{ c: number }> }).rows[0]?.c ?? 0);
@@ -337,7 +356,11 @@ describe("services", () => {
       const view = await applicationOf("Marchetti");
       const [interview] = (await testDb.store.interviews.list({ applicationId: view.application.id })).items;
       const service = createInterviewService(ctx(actors.recruiter));
-      await service.update(interview!.interview.id, { ...interview!.interview, status: "COMPLETED" });
+      await service.update(interview!.interview.id, {
+        ...interview!.interview,
+        scheduledAt: new Date(NOW.getTime() - 60_000),
+        status: "COMPLETED",
+      });
 
       expect(await testDb.store.activities.lastContactAt(view.candidate.id)).toBeInstanceOf(Date);
       const actions = (
@@ -346,7 +369,7 @@ describe("services", () => {
       expect(actions).toEqual(expect.arrayContaining(["INTERVIEW_COMPLETED", "INTERVIEW"]));
     });
 
-    it("moves finished interviews among the concluded ones, even if marked before their time", async () => {
+    it("rejects future completion and moves corrected past interviews among concluded ones", async () => {
       const view = await applicationOf("Cattaneo");
       const service = createInterviewService(ctx(actors.recruiter));
       const input = {
@@ -366,7 +389,9 @@ describe("services", () => {
         );
       expect(await concluded()).not.toContain(id);
 
-      await service.update(id, { ...input, status: "COMPLETED" });
+      await expect(service.update(id, { ...input, status: "COMPLETED" })).rejects.toThrow("futuro");
+      expect((await service.getDetail(id))?.interview.status).toBe("SCHEDULED");
+      await service.update(id, { ...input, scheduledAt: new Date(NOW.getTime() - 60_000), status: "COMPLETED" });
       expect(await concluded()).toContain(id);
       const profile = await createCandidateService(ctx(actors.recruiter)).getProfile(view.candidate.id);
       expect(profile?.lastCompletedInterview?.recruiter?.id).toBe(actors.recruiter.id);
@@ -568,7 +593,7 @@ describe("services", () => {
     );
 
     it("preserves existing application evaluations without inventing an interview", async () => {
-      const view = await applicationOf("Longo");
+      const view = await reportApplication("Longo");
       await createApplicationService(ctx(actors.recruiter)).evaluate(view.application.id, {
         result: "SUITABLE",
         reason: "Esperienza verificata",
@@ -659,7 +684,7 @@ describe("services", () => {
     });
 
     it("rejects future dates, missing reasons, wrong candidates and unauthorized recruiters without writes", async () => {
-      const view = await applicationOf("Longo");
+      const view = await reportApplication("Longo");
       const other = await applicationOf("Galli");
       const service = createInterviewService(ctx(actors.recruiter));
       const before = await countRows("interviews");
@@ -689,7 +714,7 @@ describe("services", () => {
     });
 
     it("rolls back the interview and audit when saving the outcome fails", async () => {
-      const view = await applicationOf("Longo");
+      const view = await reportApplication("Longo");
       const before = await countRows("interviews");
       const auditBefore = await countRows("audit_logs");
       const service = createInterviewService({
@@ -713,7 +738,7 @@ describe("services", () => {
     });
 
     it("loads all past interviews even across multiple pages with the same date", async () => {
-      const view = await applicationOf("Longo");
+      const view = await reportApplication("Longo");
       const inserted = await testDb.db
         .insert(interviewTable)
         .values(
@@ -745,7 +770,7 @@ describe("services", () => {
     });
 
     it("rejects an outcome linked to another application's interview", async () => {
-      const view = await applicationOf("Longo");
+      const view = await reportApplication("Longo");
       const other = await applicationOf("Galli");
       const { id } = await createInterviewService(ctx(actors.recruiter)).recordCompleted(
         other.candidate.id,

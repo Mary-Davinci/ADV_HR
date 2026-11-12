@@ -84,13 +84,13 @@ export function CandidateSearchBar({ filters, stages, recruiters }: CandidateSea
 
   return (
     <div className="flex flex-col gap-3" role="search" aria-label="Ricerca candidati">
-      <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
+      <div className="flex min-w-0 flex-col gap-3">
         <SearchInput
           value={search}
           onValueChange={setSearch}
           label="Cerca per nome, codice fiscale, email, città o professione (anche nei CV)"
           placeholder="Nome, città, professione (es. elettricista)…"
-          className="xl:max-w-sm xl:flex-1"
+          className="w-full min-w-0"
         />
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
           <FilterSelect

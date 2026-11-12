@@ -8,25 +8,25 @@ import type { SelectionListItem } from "@/repositories/types";
 /** Elenco selezioni con contatori sintetici. */
 export function SelectionTable({ items, showCompany = true }: { items: SelectionListItem[]; showCompany?: boolean }) {
   return (
-    <div className="overflow-x-auto rounded-xl border bg-card">
-      <Table>
+    <div className="max-w-full min-w-0 overflow-hidden rounded-xl border bg-card">
+      <Table className="min-w-[38rem] table-fixed">
         <caption className="sr-only">Selezioni aziendali</caption>
         <TableHeader>
           <TableRow className="bg-muted/40 hover:bg-muted/40">
-            <TableHead className="pl-4">Selezione</TableHead>
+            <TableHead className="w-[30%] pl-4">Selezione</TableHead>
             <TableHead>Stato</TableHead>
             <TableHead className="text-right">Candidati</TableHead>
             <TableHead className="hidden text-right md:table-cell">Idonei</TableHead>
             <TableHead className="hidden text-right md:table-cell">Da valutare</TableHead>
             <TableHead className="hidden text-right lg:table-cell">Colloqui</TableHead>
             <TableHead className="hidden lg:table-cell">Apertura</TableHead>
-            <TableHead className="hidden pr-4 xl:table-cell">Aggiornata</TableHead>
+            <TableHead className="hidden pr-4 2xl:table-cell">Aggiornata</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {items.map(({ selection, companyName, stats }) => (
             <TableRow key={selection.id} className="relative focus-within:bg-muted/50">
-              <TableCell className="py-3 pl-4">
+              <TableCell className="py-3 pl-4 break-words whitespace-normal">
                 <Link
                   href={`/companies/${selection.companyId}/selections/${selection.id}`}
                   className="font-medium outline-none after:absolute after:inset-0 focus-visible:underline"
@@ -47,7 +47,7 @@ export function SelectionTable({ items, showCompany = true }: { items: Selection
               <TableCell className="hidden lg:table-cell">
                 {selection.openedAt ? formatDate(selection.openedAt) : EMPTY_VALUE}
               </TableCell>
-              <TableCell className="hidden pr-4 text-muted-foreground xl:table-cell">
+              <TableCell className="hidden pr-4 text-muted-foreground 2xl:table-cell">
                 {formatTimeAgo(selection.updatedAt)}
               </TableCell>
             </TableRow>

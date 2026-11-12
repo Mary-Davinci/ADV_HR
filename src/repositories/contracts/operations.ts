@@ -93,6 +93,8 @@ export interface InterviewRepository {
   create(applicationId: EntityId, input: InterviewInput): Promise<Interview>;
   update(id: EntityId, input: InterviewInput): Promise<Interview | null>;
   delete(id: EntityId): Promise<boolean>;
+  cancelScheduled(applicationId: EntityId): Promise<Interview[]>;
+  hasOverlap(input: InterviewInput, excludeId?: EntityId): Promise<boolean>;
   count(query: Omit<InterviewQuery, "limit" | "offset" | "order">): Promise<number>;
 }
 
@@ -144,6 +146,7 @@ export interface AuditLogRepository {
 /* ------------------------------------------------------------------ */
 
 export interface TaskQuery extends PageRequest {
+  id?: EntityId;
   assignedTo?: EntityId;
   statuses?: TaskStatus[];
   candidateId?: EntityId;
@@ -169,6 +172,8 @@ export interface TaskInput {
 }
 
 export interface TaskRepository {
+  update(id: EntityId, input: TaskInput): Promise<Task | null>;
+  delete(id: EntityId): Promise<boolean>;
   list(query: TaskQuery): Promise<Page<TaskView>>;
   getById(id: EntityId): Promise<Task | null>;
   create(input: TaskInput & { createdBy: EntityId }): Promise<Task>;

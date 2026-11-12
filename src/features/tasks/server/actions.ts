@@ -1,12 +1,31 @@
 "use server";
 
 import { runAction } from "@/lib/server/action";
+import { z } from "zod";
+import { uuidSchema } from "@/lib/zod-helpers";
 
 import { poolMemberSchema, talentPoolSchema, taskSchema, taskStatusSchema } from "../schemas";
 
 export async function createTaskAction(input: unknown) {
   return runAction(input, { schema: taskSchema, revalidate: "all" }, (values, services) =>
     services.tasks.create(values),
+  );
+}
+
+export async function updateTaskAction(input: unknown) {
+  return runAction(
+    input,
+    { schema: z.object({ taskId: uuidSchema, values: taskSchema }), revalidate: "all" },
+    async ({ taskId, values }, services) => {
+      await services.tasks.update(taskId, values);
+      return { id: taskId };
+    },
+  );
+}
+
+export async function removeTaskAction(input: unknown) {
+  return runAction(input, { schema: z.object({ taskId: uuidSchema }), revalidate: "all" }, ({ taskId }, services) =>
+    services.tasks.remove(taskId),
   );
 }
 

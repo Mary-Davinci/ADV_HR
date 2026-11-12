@@ -111,7 +111,10 @@ describe("PostgreSQL repositories", () => {
       selectionId,
       limit: 10,
     });
-    expect(electrician.items.map((item) => [item.lastName, item.roleInProfile])).toEqual([["Longo", false]]);
+    expect(electrician.items.map((item) => [item.lastName, item.roleInProfile])).toEqual([
+      ["Gatti", true],
+      ["Longo", false],
+    ]);
 
     const marchetti = warehouse.items[0]!;
     const [application] = await testDb.store.applications.list({ candidateId: marchetti.candidateId });

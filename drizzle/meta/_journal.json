@@ -134,6 +134,13 @@
       "when": 1794223350960,
       "tag": "0018_interview_evaluation_history",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1794480451622,
+      "tag": "0019_hr_operations",
+      "breakpoints": true
     }
   ]
 }

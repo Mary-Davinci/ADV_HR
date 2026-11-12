@@ -2,6 +2,7 @@ import { assertValidEvaluation, type EntityId, type EvaluationResult, type Sessi
 import type { ApplicationView, Repositories } from "@/repositories/types";
 
 import { NotFoundError, recordEvent } from "./context";
+import { moveApplication } from "./recruiting-lifecycle";
 
 /** Valutazione e relativo audit partecipano alla stessa transazione del colloquio. */
 export async function insertApplicationEvaluation(
@@ -9,6 +10,7 @@ export async function insertApplicationEvaluation(
   actor: SessionUser,
   view: ApplicationView,
   input: { result: EvaluationResult; reason: string | null; notes: string | null; interviewId?: EntityId | null },
+  now = new Date(),
 ) {
   assertValidEvaluation(input);
   if (input.interviewId) {
@@ -47,5 +49,18 @@ export async function insertApplicationEvaluation(
       },
     },
   });
+  const early = ["NEW", "TO_REVIEW", "CONTACTED", "INTERVIEW_SCHEDULED"].includes(view.stage.code);
+  const pending =
+    input.result === "SUITABLE" && early
+      ? await repos.interviews.count({ applicationId: view.application.id, statuses: ["SCHEDULED"] })
+      : 0;
+  const suitableStage = early ? (pending ? "INTERVIEW_SCHEDULED" : "INTERVIEWED") : view.stage.code;
+  await moveApplication(
+    repos,
+    actor,
+    view,
+    input.result === "NOT_SUITABLE" ? "REJECTED" : input.result === "SUITABLE" ? suitableStage : "TO_REVIEW",
+    now,
+  );
   return evaluation;
 }

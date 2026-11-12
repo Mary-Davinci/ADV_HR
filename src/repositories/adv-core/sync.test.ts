@@ -20,6 +20,7 @@ import { createTestDatabase, type TestDatabase } from "@/test/test-database";
 
 import { AdvCoreApiError, type AdvCoreCandidate, type AdvCoreClient, type AdvCoreCompany } from "./client";
 import { runAdvCoreSync, SYNC_TAGS } from "./sync";
+import { createCandidateService } from "@/services/candidate-service";
 
 const NOW = new Date(Date.UTC(2026, 9, 9, 11, 20));
 const PDF = new TextEncoder().encode("%PDF-1.4 curriculum di prova");
@@ -461,4 +462,57 @@ describe("sincronizzazione ADV Core", () => {
     expect(again.stats.attachmentUnchanged).toBe(3);
     expect(api.state.downloads).toBe(downloads);
   });
+
+  it("flags shared contacts and preserves an explicit merge across subsequent sync runs", async () => {
+    const isolated = await createTestDatabase();
+    try {
+      const localApi = fakeApi();
+      localApi.state.candidates = [
+        candidate(50001, {
+          nome: "Abdelhak",
+          cognome: "Zaini",
+          cellulare: "3339988776",
+          codice_fiscale: "ZNABDL90A01F205X",
+        }),
+        candidate(50002, { nome: "Abdelhak", cognome: "Zaini", cellulare: "+39 333 9988776", codice_fiscale: null }),
+      ];
+      const run = () =>
+        runAdvCoreSync({
+          db: isolated.db,
+          client: localApi.client,
+          storage: new MemoryStorage(),
+          trigger: "MANUAL",
+          now: () => NOW,
+        });
+      expect((await run()).stats.candidatesPossibleDuplicates).toBe(1);
+      const rows = await isolated.db.select().from(candidates).where(eq(candidates.lastName, "Zaini"));
+      const target = rows.find((row) => row.fiscalCode)!;
+      const source = rows.find((row) => !row.fiscalCode)!;
+      const actor = await isolated.store.users.create({
+        email: "merge@example.test",
+        displayName: "HR test",
+        passwordHash: null,
+        roles: ["ADMIN"],
+      });
+      await createCandidateService({
+        store: isolated.store,
+        actor: { id: actor.id, email: actor.email, name: actor.displayName, roles: actor.roles },
+      }).merge(source.id, target.id);
+      localApi.state.candidates[1]!.comune = "Torino";
+      await run();
+      await run();
+      const after = await isolated.db.select().from(candidates).where(eq(candidates.lastName, "Zaini"));
+      expect(after).toHaveLength(1);
+      expect(after[0]!.id).toBe(target.id);
+      const links = await isolated.db.execute(
+        sql`SELECT adv_hr_id FROM legacy_mappings WHERE entity_type = 'CANDIDATE'`,
+      );
+      expect((links as { rows: Array<{ adv_hr_id: string }> }).rows.map((row) => row.adv_hr_id)).toEqual([
+        target.id,
+        target.id,
+      ]);
+    } finally {
+      await isolated.close();
+    }
+  }, 30_000);
 });

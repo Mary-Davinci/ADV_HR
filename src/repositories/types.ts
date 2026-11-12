@@ -51,6 +51,7 @@ export interface UserRepository {
 
 /** Notifiche personali degli utenti. Ogni operazione di lettura è limitata al proprio utente. */
 export interface NotificationRepository {
+  refreshReminders(userId: EntityId, now: Date): Promise<void>;
   createForUsers(userIds: readonly EntityId[], input: NotificationInput): Promise<void>;
   listForUser(userId: EntityId, limit: number): Promise<Notification[]>;
   countUnread(userId: EntityId): Promise<number>;

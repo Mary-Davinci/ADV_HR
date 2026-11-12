@@ -42,6 +42,7 @@ export interface ApplicationActionsProps {
   recruiterId: string | null;
   permissions: { manage: boolean; evaluate: boolean; feedback: boolean; interview: boolean };
   compact?: boolean;
+  closed?: boolean;
   /** Dati collegati alla candidatura: se presenti (e con permesso), compare "Rimuovi dalla selezione". */
   related?: ApplicationView["related"];
 }
@@ -54,7 +55,11 @@ type DialogName = "reject" | "evaluate" | "feedback" | "interview" | "remove";
  * sempre il dialog con motivazione obbligatoria.
  */
 export function ApplicationActions(props: ApplicationActionsProps) {
-  const { applicationId, candidateName, stageId, stages, permissions, compact } = props;
+  const { applicationId, candidateName, stageId, stages, compact } = props;
+  const closed = props.closed || stages.some((stage) => stage.id === stageId && stage.isTerminal);
+  const permissions = closed
+    ? { ...props.permissions, manage: false, evaluate: false, interview: false }
+    : props.permissions;
   const dialogs = useDialogState<DialogName>();
   const rejectStage = stages.find((stage) => stage.code === REJECTION_STAGE_CODE);
   const changeStage = useActionMutation(changeStageAction, {
@@ -70,7 +75,7 @@ export function ApplicationActions(props: ApplicationActionsProps) {
     changeStage.mutate({ applicationId, stageId: nextStageId, reason: "" });
   }
 
-  const canRemove = permissions.manage && props.related !== undefined;
+  const canRemove = props.permissions.manage && props.related !== undefined;
   const hasSecondary = permissions.evaluate || permissions.feedback || permissions.interview || canRemove;
 
   return (

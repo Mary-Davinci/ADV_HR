@@ -25,8 +25,34 @@ const candidatePaths = (candidateId: string) => [`/recruiting/${candidateId}`, "
 const withCandidate = <T extends z.ZodType>(values: T) => z.object({ candidateId: uuidSchema, values });
 
 export async function createCandidateAction(input: unknown) {
-  return runAction(input, { schema: identitySchema, revalidate: ["/recruiting", "/dashboard"] }, (values, services) =>
-    services.candidates.create(values),
+  return runAction(
+    input,
+    {
+      schema: identitySchema.extend({ allowDuplicate: z.boolean().optional() }),
+      revalidate: ["/recruiting", "/dashboard"],
+    },
+    ({ allowDuplicate, ...values }, services) => services.candidates.create(values, allowDuplicate),
+  );
+}
+
+export async function findDuplicateCandidatesAction(input: unknown) {
+  return runAction(input, { schema: identitySchema }, (values, services) => services.candidates.findDuplicates(values));
+}
+
+const mergeSchema = z.object({ sourceId: uuidSchema, targetId: uuidSchema });
+export async function previewCandidateMergeAction(input: unknown) {
+  return runAction(input, { schema: mergeSchema }, async ({ sourceId, targetId }, services) => {
+    const [source, target] = await Promise.all([
+      services.candidates.getProfile(sourceId),
+      services.candidates.getProfile(targetId),
+    ]);
+    if (!source || !target) throw new DomainRuleError("Una scheda non esiste più.", "CANDIDATE_MISSING");
+    return { source, target };
+  });
+}
+export async function mergeCandidatesAction(input: unknown) {
+  return runAction(input, { schema: mergeSchema, revalidate: "all" }, ({ sourceId, targetId }, services) =>
+    services.candidates.merge(sourceId, targetId),
   );
 }
 

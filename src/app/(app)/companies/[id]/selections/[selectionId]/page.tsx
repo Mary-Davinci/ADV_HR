@@ -27,6 +27,7 @@ import { getServices } from "@/lib/server/services";
 import { uuidSchema } from "@/lib/zod-helpers";
 import { getCareers } from "@/lib/server/careers";
 import { PublicationForm } from "@/features/careers/components/publication-form";
+import { parsePositionMatchFilters } from "@/domain/position-screening";
 
 type Params = PageProps<"/companies/[id]/selections/[selectionId]">;
 
@@ -57,7 +58,9 @@ function Stat({ label, value, icon: Icon }: { label: string; value: number; icon
 
 export default async function SelectionPage({ params, searchParams }: Params) {
   const user = await requirePermission("selection.read");
-  const [{ id, selectionId }, { tab }] = await Promise.all([params, searchParams]);
+  const [{ id, selectionId }, raw] = await Promise.all([params, searchParams]);
+  const { tab } = raw;
+  const matchFilters = parsePositionMatchFilters(raw);
   const [detail, recruiters] = await Promise.all([
     load(id, selectionId),
     getServices().then((services) => services.users.listRecruiters()),
@@ -154,7 +157,11 @@ export default async function SelectionPage({ params, searchParams }: Params) {
             label: "Candidati compatibili",
             content: (
               <Suspense fallback={<CompatibleCandidatesSkeleton />}>
-                <CompatibleCandidates selectionId={selection.id} canAdd={permissions.manage && !selectionClosed} />
+                <CompatibleCandidates
+                  selectionId={selection.id}
+                  canAdd={permissions.manage && !selectionClosed}
+                  filters={matchFilters}
+                />
               </Suspense>
             ),
           },

@@ -38,7 +38,14 @@ export default async function RecruitingPage({ searchParams }: PageProps<"/recru
       <PageHeader
         title="Candidati"
         description="Ricerca strutturata tra tutti i candidati. Seleziona un nominativo per aprire la scheda completa."
-        actions={can(user, "candidate.create") ? <CreateCandidateButton /> : undefined}
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <ButtonLink href="/recruiting/duplicates" variant="outline">
+              Possibili duplicati
+            </ButtonLink>
+            {can(user, "candidate.create") && <CreateCandidateButton />}
+          </div>
+        }
       />
 
       <CandidateSearchBar

@@ -23,8 +23,8 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
       <AppSidebar permissions={permissionsOf(user)} />
       <SidebarInset className="min-w-0">
         <AppHeader user={user} />
-        <main id="main-content" tabIndex={-1} className="flex-1 px-4 py-6 outline-none md:px-8 md:py-8">
-          <div className="mx-auto w-full max-w-7xl">{children}</div>
+        <main id="main-content" tabIndex={-1} className="min-w-0 flex-1 px-4 py-6 outline-none md:px-8 md:py-8">
+          <div className="mx-auto w-full max-w-7xl min-w-0">{children}</div>
         </main>
       </SidebarInset>
     </SidebarProvider>

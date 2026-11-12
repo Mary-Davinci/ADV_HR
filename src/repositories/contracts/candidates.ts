@@ -1,3 +1,4 @@
+import type { PositionMatchFacets, PositionMatchFilters, PositionScreening } from "@/domain/position-screening";
 import type {
   ActivePolicyParticipation,
   ActivePolicyProgram,
@@ -173,6 +174,13 @@ export interface CandidateSkillInput {
 }
 
 export interface CandidateRepository {
+  findDuplicates(
+    input: Pick<CandidateIdentityInput, "firstName" | "lastName" | "email" | "phone" | "fiscalCode">,
+    excludeId?: EntityId,
+  ): Promise<Array<{ candidate: Candidate; reasons: string[] }>>;
+  duplicatePairs(): Promise<Array<{ left: Candidate; right: Candidate; reasons: string[] }>>;
+  merge(sourceId: EntityId, targetId: EntityId, actorId: EntityId): Promise<void>;
+  mergedInto(id: EntityId): Promise<EntityId | null>;
   search(query: CandidateSearchQuery): Promise<Page<CandidateListItem>>;
   getById(id: EntityId): Promise<Candidate | null>;
   getAggregate(id: EntityId): Promise<CandidateAggregate | null>;
@@ -213,10 +221,14 @@ export interface CandidateRepository {
    * cercata nei dati professionali (profilo, esperienze, competenze, formazione,
    * dati ADV CORE, testo dei CV). Ordinati per parole della figura, poi requisiti.
    */
-  matchPosition(query: PositionMatchQuery): Promise<{ total: number; items: PositionMatch[] }>;
+  matchPosition(
+    query: PositionMatchQuery,
+  ): Promise<{ total: number; items: PositionMatch[]; facets: PositionMatchFacets }>;
 }
 
 export interface PositionMatchQuery {
+  screening?: PositionScreening;
+  filters?: PositionMatchFilters;
   roleKeywords: string[];
   bonusKeywords: string[];
   /** Selezione di riferimento: segnala chi è già candidato. */
@@ -232,6 +244,9 @@ export interface PositionMatchQuery {
 export type PositionMatchSource = "EXPERIENCE" | "CV" | "INTEREST" | "DETAILS";
 
 export interface PositionMatch {
+  matchStatus: "COHERENT" | "REVIEW";
+  screeningReasons: string[];
+  requirementsToVerify: string[];
   candidateId: EntityId;
   firstName: string;
   lastName: string;

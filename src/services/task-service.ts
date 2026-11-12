@@ -1,11 +1,40 @@
-import type { EntityId, TaskStatus } from "@/domain";
+import { DomainRuleError, type EntityId, type Task, type TaskStatus } from "@/domain";
 import { assertCan } from "@/lib/auth/permissions";
-import type { TaskInput, TaskQuery } from "@/repositories/types";
+import type { Repositories, TaskInput, TaskQuery } from "@/repositories/types";
 
 import { NotFoundError, nowOf, recordEvent, type ServiceContext } from "./context";
 
 export function createTaskService(context: ServiceContext) {
   const { store, actor } = context;
+
+  async function validate(input: TaskInput) {
+    if (!(await store.users.listActive()).some((user) => user.id === input.assignedTo))
+      throw new DomainRuleError("Seleziona un utente attivo.", "INVALID_ASSIGNEE");
+    if (input.candidateId && !(await store.candidates.getById(input.candidateId)))
+      throw new NotFoundError("Candidato non trovato.");
+    if (input.selectionId && !(await store.selections.getById(input.selectionId)))
+      throw new NotFoundError("Selezione non trovata.");
+    if (input.applicationId) {
+      const application = await store.applications.getById(input.applicationId);
+      if (
+        !application ||
+        (input.candidateId && application.candidateId !== input.candidateId) ||
+        (input.selectionId && application.selectionId !== input.selectionId)
+      )
+        throw new DomainRuleError("La candidatura non corrisponde al candidato o alla selezione.", "INVALID_TASK_LINK");
+    }
+  }
+
+  async function notify(repos: Repositories, task: Task) {
+    await repos.notifications.createForUsers([task.assignedTo.id], {
+      kind: "TASK_ASSIGNED",
+      title: "Task assegnato",
+      body: task.title,
+      href: `/tasks?filter=mine&task=${task.id}`,
+      candidateId: task.candidateId,
+      sourceKey: `task-assigned:${task.id}:${task.updatedAt.toISOString()}`,
+    });
+  }
 
   return {
     list(query: TaskQuery) {
@@ -15,8 +44,10 @@ export function createTaskService(context: ServiceContext) {
 
     async create(input: TaskInput): Promise<{ id: EntityId }> {
       assertCan(actor, "task.manage");
+      await validate(input);
       return store.transaction(async (repos) => {
         const task = await repos.tasks.create({ ...input, createdBy: actor.id });
+        await notify(repos, task);
         await recordEvent(repos, actor, {
           activity: {
             entityType: "TASK",
@@ -29,6 +60,42 @@ export function createTaskService(context: ServiceContext) {
           audit: { entityType: "TASK", entityId: task.id, action: "CREATE" },
         });
         return { id: task.id };
+      });
+    },
+
+    async update(id: EntityId, input: TaskInput): Promise<void> {
+      assertCan(actor, "task.manage");
+      await validate(input);
+      await store.transaction(async (repos) => {
+        const before = await repos.tasks.getById(id);
+        if (!before) throw new NotFoundError("Task non trovato.");
+        const task = await repos.tasks.update(id, input);
+        if (!task) throw new NotFoundError("Task non trovato.");
+        if (before.assignedTo.id !== input.assignedTo) await notify(repos, task);
+        await recordEvent(repos, actor, {
+          activity: {
+            entityType: "TASK",
+            entityId: id,
+            action: "UPDATED",
+            candidateId: task.candidateId,
+            selectionId: task.selectionId,
+            metadata: { title: task.title },
+          },
+          audit: {
+            entityType: "TASK",
+            entityId: id,
+            action: "UPDATE",
+            changes: { fields: Object.keys(input), reassigned: before.assignedTo.id !== input.assignedTo },
+          },
+        });
+      });
+    },
+
+    async remove(id: EntityId): Promise<void> {
+      assertCan(actor, "task.manage");
+      await store.transaction(async (repos) => {
+        if (!(await repos.tasks.delete(id))) throw new NotFoundError("Task non trovato.");
+        await recordEvent(repos, actor, { audit: { entityType: "TASK", entityId: id, action: "DELETE" } });
       });
     },
 

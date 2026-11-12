@@ -4,6 +4,7 @@ import { EmptyState } from "@/components/common/empty-state";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getServices } from "@/lib/server/services";
+import type { PositionMatchFilters } from "@/domain/position-screening";
 
 import { CompatibleCandidatesList } from "./compatible-candidates-list";
 
@@ -11,10 +12,18 @@ import { CompatibleCandidatesList } from "./compatible-candidates-list";
  * Candidati compatibili con la posizione della selezione. Caricati a parte
  * (in Suspense) per non rallentare l'apertura della selezione.
  */
-export async function CompatibleCandidates({ selectionId, canAdd }: { selectionId: string; canAdd: boolean }) {
-  const result = await (await getServices()).selections.compatibleCandidates(selectionId);
+export async function CompatibleCandidates({
+  selectionId,
+  canAdd,
+  filters = {},
+}: {
+  selectionId: string;
+  canAdd: boolean;
+  filters?: PositionMatchFilters;
+}) {
+  const result = await (await getServices()).selections.compatibleCandidates(selectionId, filters);
   if (!result) return null;
-  const { keywords, total, items, jobProvince } = result;
+  const { keywords, total, items, jobProvince, facets } = result;
 
   return (
     <Card role="region" aria-labelledby="compatible-heading">
@@ -24,16 +33,27 @@ export async function CompatibleCandidates({ selectionId, canAdd }: { selectionI
           Candidati compatibili con la posizione
         </h2>
         <p className="text-sm text-muted-foreground">
-          Figura cercata: <span className="font-medium text-foreground">{keywords.role.join(", ") || "—"}</span>
+          Figura cercata:{" "}
+          <span className="font-medium text-foreground">
+            {keywords.screening.functionLabels.join(", ") || keywords.role.join(", ") || "—"}
+          </span>
+          {keywords.screening.domainLabels.length > 0 && (
+            <>
+              {" "}
+              · ambito:{" "}
+              <span className="font-medium text-foreground">{keywords.screening.domainLabels.join(" / ")}</span>
+            </>
+          )}
           {keywords.bonus.length > 0 && (
             <>
               {" "}
               · requisiti: <span className="text-foreground">{keywords.bonus.join(", ")}</span>
             </>
           )}
-          . Ordine: prima chi ha già svolto questo mestiere (poi chi lo cita nel CV o lo indica come interesse), poi per
-          esperienza (5+ anni, 2-4, 1), vicinanza alla sede{jobProvince ? ` (${jobProvince})` : ""} e requisiti trovati.
-          La scelta resta a HR: aggiungere candidati non invia nulla all&apos;azienda.
+          . Mansioni e requisiti della job description contribuiscono alla ricerca. Prima i riscontri coerenti su
+          mestiere e ambito, poi i profili da verificare; seguono riscontri sui requisiti, esperienza dichiarata e
+          vicinanza{jobProvince ? ` (${jobProvince})` : ""}. La scelta resta a HR: aggiungere candidati non invia nulla
+          all&apos;azienda.
         </p>
         {total > 0 && (
           <p className="text-xs text-muted-foreground">
@@ -42,20 +62,27 @@ export async function CompatibleCandidates({ selectionId, canAdd }: { selectionI
         )}
       </CardHeader>
       <CardContent>
-        {keywords.role.length === 0 ? (
+        {keywords.role.length === 0 && !keywords.screening.functionPattern && !keywords.screening.domainPattern ? (
           <EmptyState
             icon={Users}
             title="Posizione non indicata"
             description="Scrivi nel titolo della selezione la figura cercata (es. “Commerciale”, “Elettricista”)."
           />
-        ) : items.length === 0 ? (
+        ) : items.length === 0 && !filters.region && !filters.flags?.length ? (
           <EmptyState
             icon={Users}
             title="Nessun candidato compatibile"
-            description="Nessun candidato ha questa figura nei dati o nel CV. Prova un titolo più generico."
+            description="Nessun profilo presenta riscontri sufficienti. Controlla il titolo e completa mansioni e requisiti della job description."
           />
         ) : (
-          <CompatibleCandidatesList selectionId={selectionId} items={items} canAdd={canAdd} />
+          <CompatibleCandidatesList
+            key={JSON.stringify(filters)}
+            selectionId={selectionId}
+            items={items}
+            canAdd={canAdd}
+            filters={filters}
+            facets={facets}
+          />
         )}
       </CardContent>
     </Card>

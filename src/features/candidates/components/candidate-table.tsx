@@ -38,7 +38,7 @@ function Stage({ item }: { item: CandidateListItem }) {
     <div className="space-y-1">
       <StageBadge code={application.stageCode} label={application.stageLabel} />
       <div className="flex items-center gap-1.5">
-        <p className="max-w-56 truncate text-xs text-muted-foreground" title={application.selectionTitle}>
+        <p className="max-w-full truncate text-xs text-muted-foreground" title={application.selectionTitle}>
           {application.selectionTitle}
         </p>
         <EvaluationIndicator result={application.latestEvaluationResult} />
@@ -107,18 +107,18 @@ export function CandidateTable({ items }: { items: CandidateListItem[] }) {
         ))}
       </ul>
 
-      <div className="hidden overflow-hidden rounded-xl border bg-card md:block">
-        <Table>
+      <div className="hidden max-w-full min-w-0 overflow-hidden rounded-xl border bg-card md:block">
+        <Table className="min-w-[42rem] table-fixed">
           <caption className="sr-only">Elenco candidati: seleziona un nome per aprire la scheda</caption>
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
-              <TableHead className="pl-4">Candidato</TableHead>
-              <TableHead>Stato</TableHead>
+              <TableHead className="w-[24%] pl-4">Candidato</TableHead>
+              <TableHead className="w-[23%]">Stato</TableHead>
               <TableHead>Prossimo colloquio</TableHead>
               <TableHead className="hidden lg:table-cell">Recruiter</TableHead>
               <TableHead>Disponibilità</TableHead>
-              <TableHead className="hidden xl:table-cell">Ultimo contatto</TableHead>
-              <TableHead className="hidden xl:table-cell">Ultima modifica</TableHead>
+              <TableHead className="hidden 2xl:table-cell">Ultimo contatto</TableHead>
+              <TableHead className="hidden 2xl:table-cell">Ultima modifica</TableHead>
               <TableHead className="w-10">
                 <span className="sr-only">Apri</span>
               </TableHead>
@@ -127,10 +127,10 @@ export function CandidateTable({ items }: { items: CandidateListItem[] }) {
           <TableBody>
             {items.map((item) => (
               <TableRow key={item.id} className="group relative focus-within:bg-muted/50">
-                <TableCell className="py-3 pl-4">
+                <TableCell className="py-3 pl-4 whitespace-normal">
                   <div className="flex items-center gap-3">
                     <OriginBadge origin={item.origin} />
-                    <div className="min-w-0">
+                    <div className="min-w-0 break-words">
                       <Link
                         href={candidateHref(item.id)}
                         className="font-medium outline-none after:absolute after:inset-0 focus-visible:underline"
@@ -151,7 +151,7 @@ export function CandidateTable({ items }: { items: CandidateListItem[] }) {
                   {item.recruiter?.displayName ?? <Muted>Non assegnato</Muted>}
                 </TableCell>
                 <TableCell>{labelOf(AVAILABILITY_LABELS, item.availability, "Non indicata")}</TableCell>
-                <TableCell className="hidden text-muted-foreground xl:table-cell">
+                <TableCell className="hidden text-muted-foreground 2xl:table-cell">
                   {item.lastContactAt ? (
                     <time dateTime={item.lastContactAt.toISOString()} title={formatDateTime(item.lastContactAt)}>
                       {formatTimeAgo(item.lastContactAt)}
@@ -160,7 +160,7 @@ export function CandidateTable({ items }: { items: CandidateListItem[] }) {
                     "Nessuno"
                   )}
                 </TableCell>
-                <TableCell className="hidden text-muted-foreground xl:table-cell">
+                <TableCell className="hidden text-muted-foreground 2xl:table-cell">
                   <time dateTime={item.updatedAt.toISOString()} title={formatDateTime(item.updatedAt)}>
                     {formatTimeAgo(item.updatedAt)}
                   </time>

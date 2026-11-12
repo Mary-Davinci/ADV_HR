@@ -303,7 +303,37 @@ export class PostgresInterviewRepository implements InterviewRepository {
   }
 
   async delete(id: EntityId): Promise<boolean> {
+    await this.db.delete(activities).where(and(eq(activities.entityType, "INTERVIEW"), eq(activities.entityId, id)));
     const rows = await this.db.delete(interviews).where(eq(interviews.id, id)).returning({ id: interviews.id });
+    return rows.length > 0;
+  }
+
+  async cancelScheduled(applicationId: EntityId): Promise<Interview[]> {
+    return this.db
+      .update(interviews)
+      .set({ status: "CANCELLED" })
+      .where(and(eq(interviews.applicationId, applicationId), eq(interviews.status, "SCHEDULED")))
+      .returning();
+  }
+
+  async hasOverlap(input: InterviewInput, excludeId?: EntityId): Promise<boolean> {
+    if (!input.recruiterId || input.status !== "SCHEDULED") return false;
+    // Serializza le prenotazioni dello stesso recruiter, anche fra richieste concorrenti.
+    await this.db.select({ id: users.id }).from(users).where(eq(users.id, input.recruiterId)).for("update");
+    const end = new Date(input.scheduledAt.getTime() + (input.durationMinutes ?? 60) * 60_000);
+    const rows = await this.db
+      .select({ id: interviews.id })
+      .from(interviews)
+      .where(
+        and(
+          eq(interviews.recruiterId, input.recruiterId),
+          eq(interviews.status, "SCHEDULED"),
+          excludeId ? ne(interviews.id, excludeId) : undefined,
+          lt(interviews.scheduledAt, end),
+          sql`${interviews.scheduledAt} + coalesce(${interviews.durationMinutes}, 60) * interval '1 minute' > ${input.scheduledAt}`,
+        ),
+      )
+      .limit(1);
     return rows.length > 0;
   }
 
@@ -397,27 +427,61 @@ export class PostgresActivityRepository implements ActivityRepository {
 
   async list(query: ActivityQuery): Promise<Activity[]> {
     const { limit, offset } = pageBounds({ limit: query.limit ?? 50, offset: query.offset });
+    const candidateContext = sql<
+      string | null
+    >`coalesce(${activities.candidateId}, ${documents.candidateId}, ${applications.candidateId})`;
+    const selectionContext = sql<
+      string | null
+    >`coalesce(${activities.selectionId}, ${documents.selectionId}, ${applications.selectionId})`;
+    const companyContext = sql<
+      string | null
+    >`coalesce(${activities.companyId}, ${documents.companyId}, ${recruitmentSelections.companyId})`;
     const conditions: SQL[] = [];
-    if (query.candidateId) conditions.push(eq(activities.candidateId, query.candidateId));
-    if (query.selectionId) conditions.push(eq(activities.selectionId, query.selectionId));
-    if (query.companyId) conditions.push(eq(activities.companyId, query.companyId));
+    if (query.candidateId) conditions.push(sql`${candidateContext} = ${query.candidateId}`);
+    if (query.selectionId) conditions.push(sql`${selectionContext} = ${query.selectionId}`);
+    if (query.companyId) conditions.push(sql`${companyContext} = ${query.companyId}`);
     if (query.entity) {
       conditions.push(and(eq(activities.entityType, query.entity.type), eq(activities.entityId, query.entity.id))!);
     }
 
     const rows = await this.db
-      .select({ activity: activities, actorName: users.displayName })
+      .select({
+        activity: activities,
+        actorName: users.displayName,
+        candidate: candidates,
+        selectionTitle: recruitmentSelections.title,
+        companyName: companies.name,
+        contextCandidateId: candidateContext,
+      })
       .from(activities)
       .leftJoin(users, eq(users.id, activities.actorId))
+      .leftJoin(documents, and(eq(documents.id, activities.entityId), eq(activities.entityType, "DOCUMENT")))
+      .leftJoin(applications, eq(applications.id, documents.applicationId))
+      .leftJoin(candidates, sql`${candidates.id} = ${candidateContext}`)
+      .leftJoin(recruitmentSelections, sql`${recruitmentSelections.id} = ${selectionContext}`)
+      .leftJoin(companies, sql`${companies.id} = ${companyContext}`)
       .where(conditions.length > 1 ? or(...conditions) : conditions[0])
       .orderBy(desc(activities.createdAt))
       .limit(limit)
       .offset(offset);
 
-    return rows.map(({ activity: { actorId, ...activity }, actorName }) => ({
-      ...activity,
-      actor: actorId && actorName ? { id: actorId, displayName: actorName } : null,
-    }));
+    return rows.map(
+      ({
+        activity: { actorId, ...activity },
+        actorName,
+        candidate,
+        selectionTitle,
+        companyName,
+        contextCandidateId,
+      }) => ({
+        ...activity,
+        candidateId: contextCandidateId,
+        candidateName: candidate ? getCandidateFullName(candidate) : null,
+        selectionTitle,
+        companyName,
+        actor: actorId && actorName ? { id: actorId, displayName: actorName } : null,
+      }),
+    );
   }
 
   async lastContactAt(candidateId: EntityId): Promise<Date | null> {
@@ -456,6 +520,7 @@ const assignee = aliasedTable(users, "assignee");
 
 function taskConditions(query: Omit<TaskQuery, "limit" | "offset">): SQL | undefined {
   const conditions: SQL[] = [];
+  if (query.id) conditions.push(eq(tasks.id, query.id));
   if (query.assignedTo) conditions.push(eq(tasks.assignedTo, query.assignedTo));
   if (query.statuses?.length) conditions.push(inArray(tasks.status, query.statuses));
   if (query.candidateId) conditions.push(eq(tasks.candidateId, query.candidateId));
@@ -467,6 +532,16 @@ function taskConditions(query: Omit<TaskQuery, "limit" | "offset">): SQL | undef
 
 export class PostgresTaskRepository implements TaskRepository {
   constructor(private readonly db: Database) {}
+
+  async update(id: EntityId, input: TaskInput): Promise<Task | null> {
+    await this.db.update(tasks).set(input).where(eq(tasks.id, id));
+    return this.getById(id);
+  }
+
+  async delete(id: EntityId): Promise<boolean> {
+    const rows = await this.db.delete(tasks).where(eq(tasks.id, id)).returning({ id: tasks.id });
+    return rows.length > 0;
+  }
 
   async list(query: TaskQuery): Promise<Page<TaskView>> {
     const { limit, offset } = pageBounds(query);

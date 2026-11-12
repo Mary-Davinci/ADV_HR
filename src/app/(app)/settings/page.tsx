@@ -32,17 +32,16 @@ export default async function SettingsPage() {
 
       <DetailSection title="Pipeline di selezione" icon={ListOrdered}>
         <p className="mb-4 text-sm text-muted-foreground">
-          Gli stage sono configurati nel database (tabella <code className="font-mono text-xs">recruiting_stages</code>
-          ), non nel codice. L&apos;editor visuale della pipeline è previsto in una prossima versione.
+          Le fasi descrivono il percorso delle candidature. Colloqui ed esiti aggiornano il percorso automaticamente; le
+          fasi conclusive chiudono la candidatura.
         </p>
         <div className="overflow-x-auto rounded-lg border">
           <Table>
-            <caption className="sr-only">Stage della pipeline</caption>
+            <caption className="sr-only">Fasi della selezione</caption>
             <TableHeader>
               <TableRow>
                 <TableHead className="w-16 pl-4">Ordine</TableHead>
-                <TableHead>Stage</TableHead>
-                <TableHead>Codice</TableHead>
+                <TableHead>Fase</TableHead>
                 <TableHead>Conclusivo</TableHead>
               </TableRow>
             </TableHeader>
@@ -53,7 +52,6 @@ export default async function SettingsPage() {
                   <TableCell>
                     <StageBadge code={stage.code} label={stage.label} />
                   </TableCell>
-                  <TableCell className="font-mono text-xs text-muted-foreground">{stage.code}</TableCell>
                   <TableCell>{stage.isTerminal ? "Sì" : "No"}</TableCell>
                 </TableRow>
               ))}
@@ -64,9 +62,13 @@ export default async function SettingsPage() {
 
       <DetailSection title="Sistema" icon={Database}>
         <DetailList>
-          <DetailField label="Sorgente dati">Database ADV_HR (PostgreSQL)</DetailField>
-          <DetailField label="Integrazione ADV CORE">Non attiva — prevista come sorgente in sola lettura</DetailField>
-          <DetailField label="Matching automatico">Non attivo — predisposto (regole spiegabili + pgvector)</DetailField>
+          <DetailField label="Archivio">Candidati, candidature e attività del team HR</DetailField>
+          <DetailField label="ADV Core">
+            Importazione in sola lettura. Le modifiche effettuate da HR vengono conservate durante la sincronizzazione.
+          </DetailField>
+          <DetailField label="Candidati compatibili">
+            Suggerimenti basati su profili, esperienze e CV rispetto alla posizione. La valutazione finale spetta a HR.
+          </DetailField>
           <DetailField label="Tema">Selezionabile dall&apos;icona nell&apos;intestazione</DetailField>
         </DetailList>
       </DetailSection>

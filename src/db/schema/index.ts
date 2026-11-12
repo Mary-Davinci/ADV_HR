@@ -10,3 +10,4 @@ export * from "./document-texts";
 export * from "./login-rate-limits";
 export * from "./careers";
 export * from "./notifications";
+export * from "./candidate-merges";

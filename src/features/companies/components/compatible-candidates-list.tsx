@@ -3,7 +3,7 @@
 import { Check, Download, ExternalLink, FileX, Loader2, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useMemo, useState, useTransition } from "react";
 
 import { FilterSelect } from "@/components/common/filter-select";
 import { Badge } from "@/components/ui/badge";
@@ -15,26 +15,23 @@ import { candidateHref } from "@/features/candidates/lib/routes";
 import { createApplicationsAction } from "@/features/recruiting/server/actions";
 import { useActionMutation } from "@/hooks/use-action-mutation";
 import { cn } from "@/lib/utils";
-import type { PositionMatch, PositionMatchSource } from "@/repositories/types";
+import type { PositionMatch } from "@/repositories/types";
+import type { PositionFilterFlag, PositionMatchFilters, PositionMatchFacets } from "@/domain/position-screening";
 
-/** Gruppi della lista, nello stesso ordine usato dal server per ordinare i candidati. */
-const GROUPS: Array<{ source: PositionMatchSource; title: string; hint: string }> = [
-  { source: "EXPERIENCE", title: "Hanno già svolto il mestiere", hint: "dalle esperienze dichiarate" },
-  { source: "CV", title: "Citano il mestiere nel CV", hint: "da verificare leggendo il CV" },
-  { source: "INTEREST", title: "Interessati al mestiere", hint: "lo indicano come settore di interesse" },
-  { source: "DETAILS", title: "Mestiere presente in formazione o note", hint: "corsi, certificazioni, note" },
-];
-
-type FilterKey = "near" | "experienced" | "readableCv" | "license" | "policy" | "noPolicy" | "orientation";
-
-const FILTERS: Array<{ key: FilterKey; label: string; test: (item: PositionMatch) => boolean }> = [
-  { key: "near", label: "Vicini alla sede", test: (item) => item.sameProvince || item.sameRegion },
-  { key: "experienced", label: "Almeno 2 anni", test: (item) => (item.experienceYears ?? 0) >= 2 },
-  { key: "readableCv", label: "CV leggibile", test: (item) => item.hasReadableCv },
-  { key: "license", label: "Con patente", test: (item) => item.drivingLicense !== null },
-  { key: "policy", label: "Con politica attiva", test: (item) => item.hasActivePolicy },
-  { key: "noPolicy", label: "Senza politica attiva", test: (item) => !item.hasActivePolicy },
-  { key: "orientation", label: "Orientamento completato", test: (item) => item.orientationCompleted },
+/** Prima i riscontri coerenti, poi quelli incompleti: la fonte resta una spiegazione, non una qualifica. */
+const GROUPS = [
+  { status: "COHERENT", title: "Riscontri coerenti", hint: "mestiere e ambito riscontrati; requisiti da confermare" },
+  { status: "REVIEW", title: "Da verificare", hint: "informazioni professionali parziali o mancanti" },
+] as const;
+type FilterKey = PositionFilterFlag;
+const FILTERS: Array<{ key: FilterKey; label: string }> = [
+  { key: "near", label: "Vicini alla sede" },
+  { key: "experienced", label: "Almeno 2 anni" },
+  { key: "readableCv", label: "CV leggibile" },
+  { key: "license", label: "Con patente" },
+  { key: "policy", label: "Con politica attiva" },
+  { key: "noPolicy", label: "Senza politica attiva" },
+  { key: "orientation", label: "Orientamento completato" },
 ];
 
 /** "Con" e "senza" politica attiva si escludono: attivarne uno spegne l'altro. */
@@ -135,10 +132,25 @@ function CandidateRow({
             Interesse: {item.interestSector}
           </span>
         )}
+        {item.screeningReasons.map((reason) => (
+          <p key={reason} className="mt-1 text-xs text-muted-foreground">
+            {reason}
+          </p>
+        ))}
+        {item.requirementsToVerify.length > 0 && (
+          <p className="mt-1 text-xs text-amber-800 dark:text-amber-300">
+            JD da verificare: {item.requirementsToVerify.join(", ")}
+          </p>
+        )}
         {item.matchedRequirements.length > 0 && (
           <span className="mt-1 flex flex-wrap gap-1">
             {item.matchedRequirements.map((requirement) => (
-              <Badge key={requirement} variant="secondary" className="gap-1 font-normal">
+              <Badge
+                key={requirement}
+                variant="secondary"
+                className="gap-1 font-normal"
+                title="Riscontro testuale nella scheda o nel CV: non conferma da solo il requisito"
+              >
                 <Check aria-hidden="true" className="size-3" />
                 {requirement}
               </Badge>
@@ -182,34 +194,31 @@ export function CompatibleCandidatesList({
   selectionId,
   items,
   canAdd,
+  filters,
+  facets,
 }: {
   selectionId: string;
   items: PositionMatch[];
   canAdd: boolean;
+  filters: PositionMatchFilters;
+  facets: PositionMatchFacets;
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [active, setActive] = useState<Set<FilterKey>>(new Set());
-  const [region, setRegion] = useState<string | undefined>();
-
-  // Regioni presenti nella lista, con il numero di candidati.
-  const regions = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const item of items) if (item.region) counts.set(item.region, (counts.get(item.region) ?? 0) + 1);
-    return [...counts]
-      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-      .map(([value, count]) => ({ value, label: `${value} (${count})` }));
-  }, [items]);
-
-  const visible = useMemo(
-    () =>
-      items.filter(
-        (item) =>
-          (!region || item.region === region) &&
-          FILTERS.every((filter) => !active.has(filter.key) || filter.test(item)),
-      ),
-    [items, active, region],
-  );
+  const [isFiltering, startTransition] = useTransition();
+  const active = new Set(filters.flags ?? []);
+  const region = filters.region;
+  const regions = facets.regions.map((item) => ({ value: item.value, label: `${item.value} (${item.count})` }));
+  const visible = items;
+  const changeFilters = (flags: Set<FilterKey>, nextRegion: string | undefined) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", "compatible");
+    if (flags.size) url.searchParams.set("match", [...flags].join(","));
+    else url.searchParams.delete("match");
+    if (nextRegion) url.searchParams.set("matchRegion", nextRegion);
+    else url.searchParams.delete("matchRegion");
+    startTransition(() => router.replace(`${url.pathname}?${url.searchParams}`, { scroll: false }));
+  };
   const addable = visible.filter((item) => !item.alreadyInSelection);
   const allSelected = addable.length > 0 && addable.every((item) => selected.has(item.candidateId));
   // Numerazione = posizione nell'ordine completo, anche con i filtri attivi.
@@ -233,20 +242,19 @@ export function CompatibleCandidatesList({
       return next;
     });
 
-  const toggleFilter = (key: FilterKey) =>
-    setActive((current) => {
-      const next = new Set(current);
-      if (next.has(key)) next.delete(key);
-      else {
-        next.add(key);
-        const opposite = EXCLUSIVE[key];
-        if (opposite) next.delete(opposite);
-      }
-      return next;
-    });
+  const toggleFilter = (key: FilterKey) => {
+    const next = new Set(active);
+    if (next.has(key)) next.delete(key);
+    else {
+      next.add(key);
+      const opposite = EXCLUSIVE[key];
+      if (opposite) next.delete(opposite);
+    }
+    changeFilters(next, region);
+  };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" aria-busy={isFiltering}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filtra i candidati">
           <span className="text-sm text-muted-foreground">Mostra solo:</span>
@@ -256,7 +264,7 @@ export function CompatibleCandidatesList({
               value={region}
               options={regions}
               allLabel="Tutte le regioni"
-              onChange={setRegion}
+              onChange={(value) => changeFilters(active, value)}
               className="h-8 sm:min-w-40"
             />
           )}
@@ -268,13 +276,14 @@ export function CompatibleCandidatesList({
                 type="button"
                 size="sm"
                 variant={pressed ? "default" : "outline"}
+                disabled={isFiltering}
                 aria-pressed={pressed}
                 onClick={() => toggleFilter(filter.key)}
               >
                 {pressed && <Check aria-hidden="true" />}
                 {filter.label}
                 <span className={cn("tabular-nums", pressed ? "opacity-80" : "text-muted-foreground")}>
-                  {items.filter(filter.test).length}
+                  {facets.counts[filter.key]}
                 </span>
               </Button>
             );
@@ -285,8 +294,7 @@ export function CompatibleCandidatesList({
               size="sm"
               variant="ghost"
               onClick={() => {
-                setActive(new Set());
-                setRegion(undefined);
+                changeFilters(new Set(), undefined);
               }}
             >
               Azzera
@@ -327,7 +335,10 @@ export function CompatibleCandidatesList({
                 <TableHead className="w-8 text-right">#</TableHead>
                 <TableHead>Candidato</TableHead>
                 <TableHead>Mansione</TableHead>
-                <TableHead className="text-right" title="Anni di esperienza">
+                <TableHead
+                  className="text-right"
+                  title="Anni di esperienza dichiarati, non necessariamente nella mansione richiesta"
+                >
                   Anni esp.
                 </TableHead>
                 <TableHead>Titolo</TableHead>
@@ -339,10 +350,10 @@ export function CompatibleCandidatesList({
             </TableHeader>
             <TableBody>
               {GROUPS.map((group) => {
-                const members = visible.filter((item) => item.roleFoundIn[0] === group.source);
+                const members = visible.filter((item) => item.matchStatus === group.status);
                 if (members.length === 0) return null;
                 return (
-                  <Fragment key={group.source}>
+                  <Fragment key={group.status}>
                     <TableRow className="bg-muted/60 hover:bg-muted/60">
                       <TableCell colSpan={COLUMNS} className="py-2 pl-3">
                         <span className="font-medium">{group.title}</span>{" "}

@@ -1,7 +1,7 @@
 import { ArrowLeft, Pencil } from "lucide-react";
 import type { Metadata } from "next";
 import { Cormorant_Garamond } from "next/font/google";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 
 import { ButtonLink } from "@/components/common/button-link";
@@ -41,6 +41,8 @@ const IVORY_THEME = [
 async function loadProfile(id: string) {
   if (!uuidSchema.safeParse(id).success) return null;
   const services = await getServices();
+  const target = await services.candidates.mergedInto(id);
+  if (target) redirect(`/recruiting/${target}`);
   return services.candidates.getProfile(id);
 }
 

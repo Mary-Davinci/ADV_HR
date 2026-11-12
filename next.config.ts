@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  deploymentId: process.env.RAILWAY_DEPLOYMENT_ID ?? process.env.RAILWAY_GIT_COMMIT_SHA,
   poweredByHeader: false,
   experimental: {
     // Upload documenti: 10 MB di file + margine per l'overhead multipart.

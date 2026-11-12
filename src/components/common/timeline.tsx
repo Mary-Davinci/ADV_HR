@@ -1,6 +1,7 @@
 import { format, isSameDay } from "date-fns";
 import { it } from "date-fns/locale";
 import { History } from "lucide-react";
+import Link from "next/link";
 
 import {
   ACTIVITY_ACTION_LABELS,
@@ -16,6 +17,7 @@ import { cn } from "@/lib/utils";
 
 const SECTION_LABELS: Record<string, string> = {
   identity: "anagrafica",
+  merge: "unione delle schede",
   profile: "profilo",
   preferences: "preferenze",
   experiences: "esperienze",
@@ -172,6 +174,30 @@ export function Timeline({ activities, emptyText = "Nessuna attività registrata
               <p className="text-sm font-medium">{title}</p>
             </div>
             {detail && <p className="text-sm text-muted-foreground">{detail}</p>}
+            {(activity.candidateName || activity.selectionTitle || activity.companyName) && (
+              <p className="text-sm text-muted-foreground">
+                {activity.candidateName && activity.candidateId && (
+                  <Link
+                    href={`/recruiting/${activity.candidateId}`}
+                    className="font-medium text-foreground hover:underline"
+                  >
+                    {activity.candidateName}
+                  </Link>
+                )}
+                {activity.selectionTitle && (
+                  <span>
+                    {activity.candidateName ? " · " : ""}
+                    {activity.selectionTitle}
+                  </span>
+                )}
+                {activity.companyName && (
+                  <span>
+                    {activity.candidateName || activity.selectionTitle ? " · " : ""}
+                    {activity.companyName}
+                  </span>
+                )}
+              </p>
+            )}
             {activity.actor && <p className="text-xs text-muted-foreground">da {activity.actor.displayName}</p>}
           </li>
         );

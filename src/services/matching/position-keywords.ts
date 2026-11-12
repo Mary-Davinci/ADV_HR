@@ -1,4 +1,5 @@
 import { professionSearchStem } from "@/domain";
+import { buildPositionScreening, type PositionScreening } from "@/domain/position-screening";
 
 /**
  * Parole chiave di una posizione aperta, ricavate dal titolo della selezione
@@ -10,6 +11,7 @@ export interface PositionKeywords {
   role: string[];
   /** Da requisiti e mansioni: non obbligatorie, migliorano l'ordinamento. */
   bonus: string[];
+  screening: PositionScreening;
 }
 
 /** Parole che non distinguono una figura professionale dall'altra. */
@@ -42,6 +44,7 @@ function words(text: string | null | undefined, exclude: Set<string>): string[] 
 export function positionKeywords(input: {
   titles: Array<string | null | undefined>;
   requirements: Array<string | null | undefined>;
+  summary?: string | null;
   /** Luoghi (città dell'azienda, sede di lavoro): nel titolo non descrivono la figura. */
   places?: Array<string | null | undefined>;
 }): PositionKeywords {
@@ -59,5 +62,13 @@ export function positionKeywords(input: {
     return picked;
   };
   const role = pick(input.titles, MAX_ROLE_KEYWORDS);
-  return { role, bonus: pick(input.requirements, MAX_BONUS_KEYWORDS) };
+  return {
+    role,
+    bonus: pick(input.requirements, MAX_BONUS_KEYWORDS),
+    screening: buildPositionScreening({
+      titles: input.titles,
+      descriptions: [...input.requirements, input.summary],
+      fallbackKeywords: role,
+    }),
+  };
 }

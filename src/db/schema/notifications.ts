@@ -1,4 +1,4 @@
-import { index, pgTable, timestamp, uuid, varchar } from "drizzle-orm/pg-core";
+import { index, pgTable, timestamp, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
 
 import type { NotificationKind } from "@/domain/notification";
 
@@ -11,6 +11,7 @@ export const notifications = pgTable(
   "notifications",
   {
     id: id(),
+    sourceKey: varchar("source_key", { length: 250 }),
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
@@ -22,5 +23,8 @@ export const notifications = pgTable(
     createdAt: createdAt(),
     readAt: timestamp("read_at", { withTimezone: true }),
   },
-  (t) => [index("notifications_user_idx").on(t.userId, t.readAt, t.createdAt)],
+  (t) => [
+    index("notifications_user_idx").on(t.userId, t.readAt, t.createdAt),
+    uniqueIndex("notifications_source_uq").on(t.userId, t.sourceKey),
+  ],
 );

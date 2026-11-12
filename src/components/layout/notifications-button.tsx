@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, BellOff, CheckCheck, UserPlus } from "lucide-react";
+import { Bell, BellOff, CalendarClock, CheckCheck, ClipboardList, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -21,7 +21,7 @@ async function loadNotifications() {
   return result.data;
 }
 
-/** Campanella con le notifiche personali (oggi: candidature arrivate dal sito). */
+/** Campanella con candidature, colloqui e task personali. */
 export function NotificationsButton() {
   const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
@@ -44,7 +44,13 @@ export function NotificationsButton() {
   const label = unread > 0 ? `Notifiche: ${unread} da leggere` : "Notifiche";
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (next) void queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      }}
+    >
       <PopoverTrigger render={<Button variant="ghost" size="icon" aria-label={label} className="relative" />}>
         <Bell aria-hidden="true" />
         {unread > 0 && (
@@ -76,12 +82,20 @@ export function NotificationsButton() {
           <div className="flex flex-col items-center gap-2 px-4 py-6 text-center">
             <BellOff aria-hidden="true" className="size-5 text-muted-foreground" />
             <p className="text-sm font-medium">Nessuna notifica</p>
-            <p className="text-xs text-muted-foreground">Qui compariranno le candidature ricevute dal sito.</p>
+            <p className="text-xs text-muted-foreground">
+              Qui compariranno colloqui di oggi, task assegnati o scaduti e nuove candidature.
+            </p>
           </div>
         ) : (
           <ul className="max-h-96 overflow-y-auto overscroll-contain py-1">
             {items.map((item) => {
               const isUnread = item.readAt === null;
+              const Icon =
+                item.kind === "INTERVIEW_TODAY"
+                  ? CalendarClock
+                  : item.kind.startsWith("TASK_")
+                    ? ClipboardList
+                    : UserPlus;
               return (
                 <li key={item.id}>
                   <Link
@@ -96,7 +110,7 @@ export function NotificationsButton() {
                     )}
                   >
                     <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                      <UserPlus aria-hidden="true" className="size-3.5" />
+                      <Icon aria-hidden="true" className="size-3.5" />
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className={cn("block text-sm", isUnread ? "font-semibold" : "font-medium")}>

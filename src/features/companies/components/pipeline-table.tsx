@@ -116,6 +116,9 @@ export function PipelineTable({ applications, stages, recruiters, interviews, pe
                   <div className="flex justify-end">
                     <ApplicationActions
                       compact
+                      closed={
+                        view.application.closedAt !== null || ["CLOSED", "ARCHIVED"].includes(view.selection.status)
+                      }
                       applicationId={view.application.id}
                       candidateName={view.candidate.fullName}
                       related={view.related}

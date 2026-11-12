@@ -25,6 +25,7 @@ type Filter = keyof typeof FILTERS;
 
 const first = (value: unknown) => (Array.isArray(value) ? value[0] : value);
 const schema = z.object({
+  task: z.preprocess(first, z.uuid().optional()).catch(undefined),
   filter: z.preprocess(first, z.enum(["mine", "overdue", "team", "done"]).optional()).catch(undefined),
 });
 
@@ -32,7 +33,8 @@ const OPEN: TaskStatus[] = ["OPEN", "IN_PROGRESS"];
 
 export default async function TasksPage({ searchParams }: PageProps<"/tasks">) {
   const user = await requirePermission("task.read");
-  const filter: Filter = schema.parse(await searchParams).filter ?? "mine";
+  const params = schema.parse(await searchParams);
+  const filter: Filter = params.filter ?? "mine";
   const now = new Date();
   const queries: Record<Filter, TaskQuery> = {
     mine: { assignedTo: user.id, statuses: OPEN },
@@ -42,7 +44,7 @@ export default async function TasksPage({ searchParams }: PageProps<"/tasks">) {
   };
   const services = await getServices();
   const [result, users, selections] = await Promise.all([
-    services.tasks.list({ ...queries[filter], limit: 100 }),
+    services.tasks.list({ ...(params.task ? { id: params.task } : queries[filter]), limit: 100 }),
     services.users.listActive(),
     services.selections.options(),
   ]);
@@ -74,9 +76,23 @@ export default async function TasksPage({ searchParams }: PageProps<"/tasks">) {
           </Link>
         ))}
       </nav>
+      {params.task && (
+        <p className="text-sm text-muted-foreground">
+          Task aperto dalla notifica.{" "}
+          <Link href="/tasks" className="underline">
+            Mostra tutti i miei task
+          </Link>
+        </p>
+      )}
       <Card>
         <CardContent>
-          <TaskList tasks={result.items} canManage={canManage} emptyText="Nessun task in questo elenco." />
+          <TaskList
+            tasks={result.items}
+            canManage={canManage}
+            users={users}
+            selections={selections}
+            emptyText="Nessun task in questo elenco."
+          />
         </CardContent>
       </Card>
     </div>

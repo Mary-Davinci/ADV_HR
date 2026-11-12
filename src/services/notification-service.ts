@@ -1,6 +1,6 @@
 import type { EntityId, Notification } from "@/domain";
 
-import type { ServiceContext } from "./context";
+import { nowOf, type ServiceContext } from "./context";
 
 /** Quante notifiche mostrare nel pannello della campanella. */
 export const NOTIFICATIONS_SHOWN = 20;
@@ -13,6 +13,7 @@ export function createNotificationService(context: ServiceContext) {
   const { store, actor } = context;
   return {
     async overview(): Promise<{ unread: number; items: Notification[] }> {
+      await store.notifications.refreshReminders(actor.id, nowOf(context));
       const [unread, items] = await Promise.all([
         store.notifications.countUnread(actor.id),
         store.notifications.listForUser(actor.id, NOTIFICATIONS_SHOWN),

@@ -17,7 +17,7 @@ import {
 import type { AdvCoreCandidate, AdvCoreCompany } from "./client";
 
 /** Da incrementare quando cambia il mapping: forza la rielaborazione di tutti i record. */
-export const MAPPING_VERSION = 6;
+export const MAPPING_VERSION = 7;
 
 export type FieldValue = string | number | boolean | null;
 /** Campi piatti "tabella.campo" (es. "candidate.email", "profile.residenceCity"). */

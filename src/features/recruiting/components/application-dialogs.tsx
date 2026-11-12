@@ -70,7 +70,7 @@ export function RejectDialog({
         onOpenChange(next);
       }}
       title={`Scartare ${candidateName}?`}
-      description="Lo scarto richiede sempre una motivazione: verrà registrata come valutazione di non idoneità."
+      description="Lo scarto registra la non idoneità, chiude la candidatura e annulla i colloqui programmati. Indica la motivazione."
       form={form}
       onSubmit={(values) => mutation.mutate(values)}
       isPending={mutation.isPending}
@@ -116,8 +116,8 @@ export function EvaluationDialog({
       title={`Valuta ${candidateName}`}
       description={
         interviewId
-          ? "L'esito sarà collegato a questo colloquio nello storico del candidato."
-          : "La valutazione riguarda questa candidatura, non il candidato in assoluto. Lo storico resta consultabile."
+          ? "L'esito aggiorna la candidatura ed è collegato al colloquio. Non idoneo chiude la candidatura e annulla i colloqui programmati."
+          : "L'esito aggiorna la fase della candidatura. Non idoneo la scarta e annulla i colloqui programmati. Lo storico resta consultabile."
       }
       form={form}
       onSubmit={(values) => mutation.mutate({ applicationId, values })}

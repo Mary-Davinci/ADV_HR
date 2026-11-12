@@ -50,7 +50,10 @@ function ApplicationCard({
   const upcoming = interviews
     .filter((item) => item.interview.status === "SCHEDULED" && item.interview.scheduledAt > now)
     .sort((a, b) => a.interview.scheduledAt.getTime() - b.interview.scheduledAt.getTime())[0];
-  const closed = view.stage.isTerminal || view.application.closedAt !== null;
+  const closed =
+    view.stage.isTerminal ||
+    view.application.closedAt !== null ||
+    ["CLOSED", "ARCHIVED"].includes(view.selection.status);
   const headingId = `application-${view.application.id}`;
 
   const history = [
@@ -104,6 +107,7 @@ function ApplicationCard({
         </div>
         <ApplicationActions
           compact
+          closed={closed}
           applicationId={view.application.id}
           candidateName={profile.fullName}
           stageId={view.stage.id}
@@ -150,6 +154,7 @@ function ApplicationCard({
                 </time>
                 {entry.kind === "interview" ? (
                   <InterviewEntry
+                    closed={closed}
                     item={entry.item}
                     profile={profile}
                     evaluations={evaluations.filter((evaluation) => evaluation.interviewId === entry.item.interview.id)}
@@ -192,6 +197,7 @@ function ApplicationCard({
 }
 
 function InterviewEntry({
+  closed,
   item,
   profile,
   evaluations,
@@ -199,6 +205,7 @@ function InterviewEntry({
   recruiters,
   permissions,
 }: {
+  closed: boolean;
   item: InterviewItem;
   profile: CandidateProfileView;
   evaluations: CandidateProfileView["evaluations"][string];
@@ -237,13 +244,19 @@ function InterviewEntry({
           <InterviewReportActions
             interview={item.interview}
             candidateName={profile.fullName}
-            canEvaluate={permissions.evaluate}
+            canEvaluate={permissions.evaluate && !closed}
             canFeedback={permissions.feedback}
           />
         )}
         {permissions.interview && (
           <>
-            <InterviewEditButton interview={item.interview} candidateName={profile.fullName} recruiters={recruiters} />
+            {!closed && (
+              <InterviewEditButton
+                interview={item.interview}
+                candidateName={profile.fullName}
+                recruiters={recruiters}
+              />
+            )}
             <InterviewDeleteButton interviewId={item.interview.id} candidateName={profile.fullName} />
           </>
         )}
@@ -277,7 +290,10 @@ export function ApplicationsPanel({
     );
   }
 
-  const isClosed = (view: ApplicationViewItem) => view.stage.isTerminal || view.application.closedAt !== null;
+  const isClosed = (view: ApplicationViewItem) =>
+    view.stage.isTerminal ||
+    view.application.closedAt !== null ||
+    ["CLOSED", "ARCHIVED"].includes(view.selection.status);
   const open = profile.applications.filter((view) => !isClosed(view));
   const closed = profile.applications.filter(isClosed);
   const card = (view: ApplicationViewItem) => (

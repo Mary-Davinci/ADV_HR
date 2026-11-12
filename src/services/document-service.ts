@@ -90,6 +90,22 @@ export function createDocumentService(
     return false;
   }
 
+  async function activityContext(owner: {
+    candidateId?: EntityId | null;
+    applicationId?: EntityId | null;
+    selectionId?: EntityId | null;
+    companyId?: EntityId | null;
+  }) {
+    const application = owner.applicationId ? await store.applications.getView(owner.applicationId) : null;
+    const selectionId = owner.selectionId ?? application?.selection.id ?? null;
+    const selection = selectionId ? await store.selections.getById(selectionId) : null;
+    return {
+      candidateId: owner.candidateId ?? application?.candidate.id ?? null,
+      selectionId,
+      companyId: owner.companyId ?? application?.company.id ?? selection?.selection.companyId ?? null,
+    };
+  }
+
   return {
     list(owner: DocumentOwner) {
       assertCan(actor, "document.read");
@@ -101,6 +117,7 @@ export function createDocumentService(
       validateUpload(file);
       const { entityType, entityId } = ownerContext(owner);
       if (!(await ownerExists(owner))) throw new NotFoundError("Elemento di destinazione non trovato.");
+      const eventContext = await activityContext(owner);
 
       const now = nowOf(context);
       // Chiave generata dal server: il nome originale non entra mai nel percorso.
@@ -127,9 +144,7 @@ export function createDocumentService(
               entityType: "DOCUMENT",
               entityId: document.id,
               action: "DOCUMENT_UPLOADED",
-              candidateId: owner.candidateId ?? null,
-              selectionId: owner.selectionId ?? null,
-              companyId: owner.companyId ?? null,
+              ...eventContext,
               metadata: { type, owner: entityType, ownerId: entityId },
             },
             audit: {
@@ -161,6 +176,7 @@ export function createDocumentService(
       assertCan(actor, "document.manage");
       const document = await store.documents.getById(id);
       if (!document) throw new NotFoundError("Documento non trovato.");
+      const eventContext = await activityContext(document);
       await store.transaction(async (repos) => {
         await repos.documents.delete(id);
         await recordEvent(repos, actor, {
@@ -168,9 +184,7 @@ export function createDocumentService(
             entityType: "DOCUMENT",
             entityId: id,
             action: "DOCUMENT_DELETED",
-            candidateId: document.candidateId,
-            selectionId: document.selectionId,
-            companyId: document.companyId,
+            ...eventContext,
             metadata: { type: document.type },
           },
           audit: { entityType: "DOCUMENT", entityId: id, action: "DELETE", changes: { type: document.type } },

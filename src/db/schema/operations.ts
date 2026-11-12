@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   bigint,
   index,
@@ -169,6 +170,8 @@ export const legacyMappings = pgTable(
   },
   (t) => [
     uniqueIndex("legacy_mappings_legacy_uq").on(t.legacySystem, t.entityType, t.legacyId),
-    uniqueIndex("legacy_mappings_adv_hr_uq").on(t.legacySystem, t.entityType, t.advHrId),
+    uniqueIndex("legacy_mappings_adv_hr_uq")
+      .on(t.legacySystem, t.entityType, t.advHrId)
+      .where(sql`${t.entityType} <> 'CANDIDATE'`),
   ],
 );

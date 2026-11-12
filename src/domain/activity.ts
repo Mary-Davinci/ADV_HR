@@ -48,6 +48,9 @@ export function isContactAction(action: ActivityAction): action is ContactAction
  * candidato o di una selezione senza join ricorsivi.
  */
 export interface Activity {
+  candidateName?: string | null;
+  selectionTitle?: string | null;
+  companyName?: string | null;
   id: EntityId;
   entityType: ActivityEntityType;
   entityId: EntityId;

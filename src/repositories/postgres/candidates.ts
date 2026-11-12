@@ -60,6 +60,13 @@ import type {
   SkillRepository,
 } from "../types";
 import { containsText, escapeLike, pageBounds, searchTerms, sqlList, toCount, type Database } from "./db";
+import { buildPositionScreening, professionPattern, type PositionMatchFacets } from "@/domain/position-screening";
+import {
+  candidateDuplicatePairs,
+  findCandidateDuplicates,
+  mergeCandidateRecords,
+  mergedCandidateTarget,
+} from "./candidate-duplicates";
 
 /* ------------------------------------------------------------------ */
 /* Mapping                                                              */
@@ -258,6 +265,7 @@ function matchesProfession(term: string): SQL {
  */
 
 const professionExperienceText = sql.raw(`concat_ws(' ',
+  p.experience_sector,
   CASE WHEN ${FROM_ADV_CORE_SQL} THEN NULL ELSE ${MEANINGFUL_SUMMARY_SQL} END,
   (SELECT string_agg(concat_ws(' ', e.role_title, e.sector), ' ') FROM candidate_experiences e WHERE e.candidate_id = c.id),
   adv.payload->>'settore_esperienza'
@@ -274,6 +282,7 @@ const professionDetailText = sql.raw(`concat_ws(' ',
   (SELECT string_agg(sk.name, ' ') FROM candidate_skills cs JOIN skills sk ON sk.id = cs.skill_id WHERE cs.candidate_id = c.id),
   (SELECT string_agg(concat_ws(' ', ed.qualification, ed.field_of_study), ' ') FROM candidate_education ed WHERE ed.candidate_id = c.id),
   (SELECT string_agg(cc.name, ' ') FROM candidate_certifications cc WHERE cc.candidate_id = c.id),
+  (SELECT string_agg(concat_ws(' ', cl.language, cl.level), ' ') FROM candidate_languages cl WHERE cl.candidate_id = c.id),
   adv.payload->>'titolo_studio', adv.payload->>'certificazioni',
   adv.payload->>'competenze_informatiche', adv.payload->>'note_colloquio'
 )`);
@@ -393,6 +402,22 @@ function buildConditions(query: CandidateSearchQuery): SQL[] {
 
 export class PostgresCandidateRepository implements CandidateRepository {
   constructor(private readonly db: Database) {}
+
+  findDuplicates(
+    input: Pick<CandidateIdentityInput, "firstName" | "lastName" | "email" | "phone" | "fiscalCode">,
+    excludeId?: EntityId,
+  ) {
+    return findCandidateDuplicates(this.db, input, excludeId);
+  }
+  duplicatePairs() {
+    return candidateDuplicatePairs(this.db);
+  }
+  merge(sourceId: EntityId, targetId: EntityId, actorId: EntityId) {
+    return mergeCandidateRecords(this.db, sourceId, targetId, actorId);
+  }
+  mergedInto(id: EntityId) {
+    return mergedCandidateTarget(this.db, id);
+  }
 
   async search(query: CandidateSearchQuery): Promise<Page<CandidateListItem>> {
     const { limit, offset } = pageBounds(query);
@@ -758,22 +783,68 @@ export class PostgresCandidateRepository implements CandidateRepository {
     return rows.length > 0;
   }
 
-  async matchPosition(query: PositionMatchQuery): Promise<{ total: number; items: PositionMatch[] }> {
-    if (query.roleKeywords.length === 0) return { total: 0, items: [] };
+  async matchPosition(
+    query: PositionMatchQuery,
+  ): Promise<{ total: number; items: PositionMatch[]; facets: PositionMatchFacets }> {
+    const emptyFacets: PositionMatchFacets = {
+      regions: [],
+      counts: { near: 0, experienced: 0, readableCv: 0, license: 0, policy: 0, noPolicy: 0, orientation: 0 },
+    };
+    const screening =
+      query.screening ??
+      buildPositionScreening({ titles: query.roleKeywords, descriptions: [], fallbackKeywords: query.roleKeywords });
+    if (query.roleKeywords.length === 0 && !screening.functionPattern && !screening.domainPattern)
+      return { total: 0, items: [], facets: emptyFacets };
     const keywords = [
-      ...query.roleKeywords.map((word) => ({ word, role: true })),
-      ...query.bonusKeywords.map((word) => ({ word, role: false })),
-    ].map(({ word, role }) => {
-      const stem = professionSearchStem(word);
-      // "commerciale" vale per commerciale/commerciali, non per commercialista o commercializzazione.
-      const exact = `\\m${stem.replace(/[^a-z0-9]/g, "")}[a-z]{0,2}\\M`;
-      return { word, role, pattern: `%${escapeLike(stem)}%`, exact };
-    });
+      ...query.roleKeywords.map((word) => ({ word, role: true, kind: "role", exact: professionPattern([word])! })),
+      ...query.bonusKeywords.map((word) => ({ word, role: false, kind: "bonus", exact: professionPattern([word])! })),
+      ...screening.functions.map((concept) => ({
+        word: concept.label,
+        role: true,
+        kind: "function",
+        exact: concept.pattern,
+      })),
+      ...screening.domains.map((concept) => ({
+        word: concept.label,
+        role: true,
+        kind: "domain",
+        exact: concept.pattern,
+      })),
+    ];
     const jobProvince = query.jobProvince?.trim().toUpperCase() || null;
-
+    const match = (column: string, pattern: string | null): SQL =>
+      pattern ? sql`${sql.raw(column)} ~ ${pattern}` : sql`false`;
+    const any = (pattern: string | null): SQL =>
+      sql`(${match("prof.exp", pattern)} OR ${match("prof.cv", pattern)} OR ${match("prof.interest", pattern)} OR ${match("prof.detail", pattern)})`;
+    const fnAny = any(screening.functionPattern);
+    const domainAny = any(screening.domainPattern);
+    const coherent =
+      screening.functionPattern && screening.domainPattern
+        ? sql`((${match("prof.exp", screening.functionPattern)} AND ${match("prof.exp", screening.domainPattern)}) OR (${match("prof.cv", screening.functionPattern)} AND ${match("prof.cv", screening.domainPattern)}))`
+        : sql`(${match("prof.exp", screening.functionPattern ?? screening.domainPattern)} OR ${match("prof.cv", screening.functionPattern ?? screening.domainPattern)})`;
+    const admitted = screening.domainPattern
+      ? sql`(${domainAny} OR (${fnAny} AND NOT ${any(screening.otherDomainPattern)}))`
+      : screening.functionPattern
+        ? fnAny
+        : sql`true`;
+    const filterConditions: SQL[] = [];
+    if (query.filters?.region) filterConditions.push(sql`e.residence_region = ${query.filters.region}`);
+    for (const flag of query.filters?.flags ?? []) {
+      const clauses = {
+        near: sql`(e.same_province OR e.same_region)`,
+        experienced: sql`e.years >= 2`,
+        readableCv: sql`e.has_readable_cv`,
+        license: sql`e.driving_license IS NOT NULL`,
+        policy: sql`e.has_active_policy`,
+        noPolicy: sql`NOT e.has_active_policy`,
+        orientation: sql`e.orientation_completed`,
+      };
+      filterConditions.push(clauses[flag]);
+    }
+    const filters = filterConditions.length ? sql`WHERE ${sql.join(filterConditions, sql` AND `)}` : sql``;
     const result = (await this.db.execute(sql`
       WITH kw AS (
-        SELECT t.k->>'word' AS word, t.k->>'pattern' AS pattern, t.k->>'exact' AS exact,
+        SELECT t.k->>'word' AS word, t.k->>'kind' AS kind, t.k->>'exact' AS exact,
                (t.k->>'role')::boolean AS role, t.ord
         FROM jsonb_array_elements(${JSON.stringify(keywords)}::jsonb) WITH ORDINALITY AS t(k, ord)
       ),
@@ -802,16 +873,26 @@ export class PostgresCandidateRepository implements CandidateRepository {
         WHERE c.id NOT IN (SELECT candidate_id FROM removed)
           ${query.candidateIds?.length ? sql`AND c.id IN (${sqlList(query.candidateIds)})` : sql``}
       ),
+      signals AS MATERIALIZED (
+        SELECT prof.*, ${fnAny} AS function_match, ${domainAny} AS domain_match,
+               ${coherent} AS coherent_match, ${admitted} AS admitted
+        FROM prof
+      ),
       found AS (
         SELECT prof.id, kw.word, kw.ord, kw.role,
-               prof.exp LIKE kw.pattern AS in_exp, prof.exp ~ kw.exact AS exact_exp, prof.cv LIKE kw.pattern AS in_cv,
-               prof.interest LIKE kw.pattern AS in_interest, prof.detail LIKE kw.pattern AS in_detail
-        FROM prof JOIN kw ON prof.exp LIKE kw.pattern OR prof.cv LIKE kw.pattern
-                          OR prof.interest LIKE kw.pattern OR prof.detail LIKE kw.pattern
+               prof.exp ~ kw.exact AS in_exp, prof.exp ~ kw.exact AS exact_exp, prof.cv ~ kw.exact AS in_cv,
+               prof.interest ~ kw.exact AS in_interest, prof.detail ~ kw.exact AS in_detail,
+               kw.kind, prof.function_match, prof.domain_match, prof.coherent_match
+        FROM signals prof JOIN kw ON prof.exp ~ kw.exact OR prof.cv ~ kw.exact
+                          OR prof.interest ~ kw.exact OR prof.detail ~ kw.exact
+        WHERE prof.admitted
       ),
       hits AS MATERIALIZED (
         SELECT id,
-               array_agg(word ORDER BY ord) AS matched,
+               bool_or(function_match) AS function_match, bool_or(domain_match) AS domain_match,
+               bool_or(coherent_match) AS coherent_match,
+               coalesce(array_agg(DISTINCT word) FILTER (WHERE kind = 'domain'), '{}') AS matched_domains,
+               coalesce(array_agg(word ORDER BY ord) FILTER (WHERE kind IN ('role', 'bonus')), '{}') AS matched,
                coalesce(array_agg(word ORDER BY ord) FILTER (WHERE NOT role), '{}') AS requirements,
                bool_or(role AND in_exp) AS role_exp, bool_or(role AND exact_exp) AS role_exact,
                bool_or(role AND in_cv) AS role_cv,
@@ -827,8 +908,15 @@ export class PostgresCandidateRepository implements CandidateRepository {
                coalesce(upper(pr.residence_province) = ${jobProvince}, false) AS same_province,
                coalesce(pr.residence_region = (SELECT region FROM job_region), false) AS same_region,
                adv.payload,
+               CASE WHEN EXISTS (SELECT 1 FROM candidate_driving_licenses dl WHERE dl.candidate_id = c.id)
+                 THEN (SELECT string_agg(dl.category::text, ', ' ORDER BY dl.category::text) FROM candidate_driving_licenses dl WHERE dl.candidate_id = c.id AND dl.valid)
+                 ELSE nullif(nullif(trim(adv.payload->>'patente'), ''), 'Nessuna') END AS driving_license,
+               prefs.willing_to_relocate, prefs.willing_to_travel,
+               coalesce(prefs.desired_work_mode::text, nullif(trim(adv.payload->>'modalita_lavoro'), '')) AS preferred_work_mode,
+               coalesce(nullif(pr.employment_status::text, 'UNKNOWN'), nullif(trim(adv.payload->>'stato_occupazionale'), '')) AS employment_status,
                -- Anni dichiarati in ADV CORE (valori non plausibili scartati), altrimenti dalle esperienze.
                coalesce(
+                 CASE WHEN pr.experience_months BETWEEN 0 AND 600 THEN pr.experience_months::numeric / 12 END,
                  CASE WHEN adv.payload->>'esperienza_anni' ~ '^[0-9]{1,2}$' AND (adv.payload->>'esperienza_anni')::int <= 50
                       THEN (adv.payload->>'esperienza_anni')::int
                         + CASE WHEN adv.payload->>'esperienza_mesi' ~ '^[0-9]{1,2}$' AND (adv.payload->>'esperienza_mesi')::int <= 11
@@ -837,7 +925,7 @@ export class PostgresCandidateRepository implements CandidateRepository {
                                    + extract(month FROM age(coalesce(e.end_date, current_date), e.start_date)))
                          FROM candidate_experiences e WHERE e.candidate_id = c.id), 0) / 12
                ) AS years,
-               coalesce(nullif(trim(adv.payload->>'settore_esperienza'), ''),
+               coalesce(nullif(trim(pr.experience_sector), ''), nullif(trim(adv.payload->>'settore_esperienza'), ''),
                  (SELECT string_agg(DISTINCT e.role_title, ', ') FROM candidate_experiences e WHERE e.candidate_id = c.id)
                ) AS experience_sector,
                coalesce(nullif(trim(adv.payload->>'settore_interesse'), ''),
@@ -860,6 +948,7 @@ export class PostgresCandidateRepository implements CandidateRepository {
         FROM hits h
         JOIN candidates c ON c.id = h.id
         LEFT JOIN candidate_profiles pr ON pr.candidate_id = c.id
+        LEFT JOIN candidate_preferences prefs ON prefs.candidate_id = c.id
         LEFT JOIN LATERAL (
           SELECT r.payload FROM legacy_mappings lm
           JOIN adv_core_records r ON r.entity_type = lm.entity_type AND r.legacy_id = lm.legacy_id
@@ -867,35 +956,66 @@ export class PostgresCandidateRepository implements CandidateRepository {
           LIMIT 1
         ) adv ON true
       )
-      SELECT e.*, count(*) OVER ()::int AS total
-      FROM enriched e
-      -- Ordine dichiarato a HR: dove compare la figura (esperienza con la parola esatta > esperienza
-      -- con parola simile > CV > interesse > altri dati),
-      -- fascia di esperienza (5+ anni, 2-4, 1), vicinanza alla sede (provincia, regione),
-      -- requisiti trovati, poi anni esatti e CV leggibile. Nessun criterio legato alla data di modifica.
-      ORDER BY
-        CASE WHEN e.role_exact THEN 4 WHEN e.role_exp THEN 3 WHEN e.role_cv THEN 2 WHEN e.role_interest THEN 1 ELSE 0 END DESC,
-        CASE WHEN e.years >= 5 THEN 3 WHEN e.years >= 2 THEN 2 WHEN e.years >= 1 THEN 1 ELSE 0 END DESC,
-        (e.same_province::int * 2 + e.same_region::int) DESC,
-        e.requirement_hits DESC, e.role_hits DESC, e.years DESC NULLS LAST, e.has_readable_cv DESC,
-        e.last_name, e.first_name, e.candidate_id
-      LIMIT ${query.limit}
-    `)) as unknown as { rows: PositionMatchRow[] };
+      , eligible AS MATERIALIZED (SELECT * FROM enriched),
+      filtered AS (SELECT e.* FROM eligible e ${filters}),
+      page AS (
+        SELECT e.* FROM filtered e
+        ORDER BY e.coherent_match DESC,
+          CASE WHEN e.role_exact THEN 4 WHEN e.role_exp THEN 3 WHEN e.role_cv THEN 2 WHEN e.role_interest THEN 1 ELSE 0 END DESC,
+          e.requirement_hits DESC,
+          CASE WHEN e.years >= 5 THEN 3 WHEN e.years >= 2 THEN 2 WHEN e.years >= 1 THEN 1 ELSE 0 END DESC,
+          (e.same_province::int * 2 + e.same_region::int) DESC,
+          e.role_hits DESC, e.years DESC NULLS LAST, e.has_readable_cv DESC,
+          e.last_name, e.first_name, e.candidate_id
+        LIMIT ${query.limit}
+      )
+      SELECT (SELECT count(*)::int FROM filtered) AS total,
+             coalesce((SELECT jsonb_agg(to_jsonb(page)) FROM page), '[]'::jsonb) AS items,
+             jsonb_build_object(
+               'regions', coalesce((SELECT jsonb_agg(r ORDER BY r.count DESC, r.value) FROM (
+                 SELECT residence_region AS value, count(*)::int AS count FROM eligible WHERE residence_region IS NOT NULL GROUP BY residence_region
+               ) r), '[]'::jsonb),
+               'counts', (SELECT jsonb_build_object(
+                 'near', count(*) FILTER (WHERE same_province OR same_region),
+                 'experienced', count(*) FILTER (WHERE years >= 2),
+                 'readableCv', count(*) FILTER (WHERE has_readable_cv),
+                 'license', count(*) FILTER (WHERE driving_license IS NOT NULL),
+                 'policy', count(*) FILTER (WHERE has_active_policy),
+                 'noPolicy', count(*) FILTER (WHERE NOT has_active_policy),
+                 'orientation', count(*) FILTER (WHERE orientation_completed)
+               ) FROM eligible)
+             ) AS facets
+    `)) as unknown as { rows: Array<{ total: number; items: PositionMatchRow[]; facets: PositionMatchFacets }> };
 
     const yesNo = (value: unknown) => (value === "SI" ? true : value === "NO" ? false : null);
-    const text = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : null);
 
     return {
       total: toCount(result.rows[0]?.total ?? 0),
-      items: result.rows.map((row) => {
+      facets: result.rows[0]?.facets ?? emptyFacets,
+      items: (result.rows[0]?.items ?? []).map((row) => {
         const roleFoundIn: PositionMatchSource[] = [];
         if (row.role_exp) roleFoundIn.push("EXPERIENCE");
         if (row.role_cv) roleFoundIn.push("CV");
         if (row.role_interest) roleFoundIn.push("INTEREST");
         if (row.role_detail) roleFoundIn.push("DETAILS");
         const payload = row.payload ?? {};
-        const license = text(payload.patente);
+        const license = row.driving_license;
         return {
+          matchStatus: row.coherent_match ? "COHERENT" : "REVIEW",
+          screeningReasons: [
+            ...(row.function_match ? [`Mansione riscontrata: ${screening.functionLabels.join(" / ")}`] : []),
+            ...(row.matched_domains.length ? [`Ambito riscontrato: ${row.matched_domains.join(", ")}`] : []),
+            ...(screening.functionPattern && !row.function_match
+              ? [`Mansione da verificare: ${screening.functionLabels.join(" / ")}`]
+              : []),
+            ...(screening.domainPattern && !row.domain_match
+              ? [`Settore da verificare: ${screening.domainLabels.join(" / ")}`]
+              : []),
+            ...(!row.coherent_match && row.function_match && row.domain_match
+              ? ["Mansione e settore non confermati nella stessa fonte professionale"]
+              : []),
+          ],
+          requirementsToVerify: query.bonusKeywords.filter((word) => !row.requirements.includes(word)),
           candidateId: row.candidate_id,
           firstName: row.first_name,
           lastName: row.last_name,
@@ -910,10 +1030,10 @@ export class PostgresCandidateRepository implements CandidateRepository {
           interestSector: row.interest_sector?.slice(0, 160) ?? null,
           educationLevel: row.education_level,
           drivingLicense: license && license !== "Nessuna" ? license : null,
-          availableToRelocate: yesNo(payload.disponibilita_trasferimento),
-          availableToTravel: yesNo(payload.disponibilita_trasferte),
-          workMode: text(payload.modalita_lavoro),
-          employmentStatus: text(payload.stato_occupazionale),
+          availableToRelocate: row.willing_to_relocate ?? yesNo(payload.disponibilita_trasferimento),
+          availableToTravel: row.willing_to_travel ?? yesNo(payload.disponibilita_trasferte),
+          workMode: row.preferred_work_mode,
+          employmentStatus: row.employment_status,
           sameProvince: row.same_province,
           sameRegion: row.same_region,
           region: row.residence_region,
@@ -952,6 +1072,15 @@ export class PostgresCandidateRepository implements CandidateRepository {
 }
 
 interface PositionMatchRow {
+  function_match: boolean;
+  domain_match: boolean;
+  coherent_match: boolean;
+  matched_domains: string[];
+  driving_license: string | null;
+  willing_to_relocate: boolean | null;
+  willing_to_travel: boolean | null;
+  preferred_work_mode: string | null;
+  employment_status: string | null;
   candidate_id: string;
   first_name: string;
   last_name: string;

@@ -8,6 +8,7 @@
  * Nei log e nelle statistiche finiscono solo conteggi e id ADV CORE, mai dati personali.
  */
 import { createHash, randomUUID } from "node:crypto";
+import { findCandidateDuplicates } from "../postgres/candidate-duplicates";
 
 import { and, eq, inArray, isNull, ne, or, sql, type SQL } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
@@ -59,7 +60,7 @@ import {
 export const SYNC_TAGS = {
   imported: { slug: "adv-core", name: "ADV Core" },
   conflict: { slug: "adv-core-conflitto", name: "ADV Core: dati diversi" },
-  duplicate: { slug: "adv-core-duplicato", name: "ADV Core: CF duplicato" },
+  duplicate: { slug: "adv-core-duplicato", name: "ADV Core: possibile duplicato" },
   removed: { slug: "adv-core-rimosso", name: "ADV Core: rimosso" },
 } as const;
 
@@ -175,7 +176,10 @@ export async function runAdvCoreSync(options: SyncOptions): Promise<SyncSummary>
 
   async function ensureTags() {
     for (const [key, tag] of Object.entries(SYNC_TAGS)) {
-      await db.insert(tags).values(tag).onConflictDoNothing({ target: tags.slug });
+      await db
+        .insert(tags)
+        .values(tag)
+        .onConflictDoUpdate({ target: tags.slug, set: { name: tag.name } });
       const [row] = await db.select({ id: tags.id }).from(tags).where(eq(tags.slug, tag.slug));
       tagIds[key as keyof typeof SYNC_TAGS] = row!.id;
     }
@@ -480,6 +484,19 @@ export async function runAdvCoreSync(options: SyncOptions): Promise<SyncSummary>
       const keys = Object.keys(incoming);
       const flags: Record<string, unknown> = {};
       let candidateId = await findMapping(tx, "CANDIDATE", legacyId);
+      const possibleDuplicates = await findCandidateDuplicates(
+        tx,
+        {
+          firstName: incoming["candidate.firstName"] as string,
+          lastName: incoming["candidate.lastName"] as string,
+          fiscalCode: incoming["candidate.fiscalCode"] as string | null,
+          email: incoming["candidate.email"] as string | null,
+          phone: incoming["candidate.phone"] as string | null,
+        },
+        candidateId ?? undefined,
+      );
+      flags.possibleDuplicateIds = possibleDuplicates.map((match) => match.candidate.id);
+      if (possibleDuplicates.length) bump("candidatesPossibleDuplicates");
       let base: FieldMap | null = (record?.importedValues as FieldMap | undefined) ?? null;
       let created = false;
 
@@ -562,7 +579,12 @@ export async function runAdvCoreSync(options: SyncOptions): Promise<SyncSummary>
       if (hasConflicts) bump("candidatesWithConflicts");
       await setTag(tx, candidateId, "imported", true);
       await setTag(tx, candidateId, "conflict", hasConflicts);
-      await setTag(tx, candidateId, "duplicate", Boolean(allFlags.duplicateOf));
+      await setTag(
+        tx,
+        candidateId,
+        "duplicate",
+        Boolean(allFlags.duplicateOf) || possibleDuplicates.some((match) => match.candidate.id !== candidateId),
+      );
       await setTag(tx, candidateId, "removed", removed);
 
       await saveRecord(tx, "CANDIDATE", legacyId, {

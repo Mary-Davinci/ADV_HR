@@ -1,7 +1,7 @@
 "use client";
 
 import { isPast } from "date-fns";
-import { CheckCircle2, Circle, CircleDot, Loader2 } from "lucide-react";
+import { CheckCircle2, Circle, CircleDot, Loader2, Trash2 } from "lucide-react";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
@@ -12,8 +12,28 @@ import { useActionMutation } from "@/hooks/use-action-mutation";
 import { formatRelativeDay } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { TaskView } from "@/repositories/types";
+import { ConfirmButton } from "@/components/common/confirm-button";
+import { CreateTaskButton } from "./create-task-button";
 
-import { setTaskStatusAction } from "../server/actions";
+import { removeTaskAction, setTaskStatusAction } from "../server/actions";
+
+function DeleteTaskButton({ task }: { task: TaskView }) {
+  const remove = useActionMutation(removeTaskAction, { successMessage: "Task eliminato" });
+  return (
+    <ConfirmButton
+      variant="ghost"
+      size="icon-sm"
+      aria-label={`Elimina task: ${task.title}`}
+      title="Eliminare il task?"
+      description={`Il task “${task.title}” verrà eliminato.`}
+      confirmLabel="Elimina"
+      disabled={remove.isPending}
+      onConfirm={() => remove.mutateAsync({ taskId: task.id })}
+    >
+      <Trash2 aria-hidden="true" />
+    </ConfirmButton>
+  );
+}
 
 function StatusToggle({ task, disabled }: { task: TaskView; disabled: boolean }) {
   const mutation = useActionMutation(setTaskStatusAction, {
@@ -41,11 +61,15 @@ export function TaskList({
   canManage,
   compact = false,
   emptyText = "Nessun task.",
+  users,
+  selections,
 }: {
   tasks: TaskView[];
   canManage: boolean;
   compact?: boolean;
   emptyText?: string;
+  users?: Array<{ id: string; displayName: string }>;
+  selections?: Array<{ id: string; title: string; companyName: string }>;
 }) {
   if (tasks.length === 0) return <p className="py-6 text-center text-sm text-muted-foreground">{emptyText}</p>;
 
@@ -79,6 +103,17 @@ export function TaskList({
               </p>
             </div>
             <TaskPriorityBadge priority={task.priority} />
+            {canManage && !compact && users && selections && (
+              <div className="flex shrink-0">
+                <CreateTaskButton
+                  task={task}
+                  users={users}
+                  selections={selections}
+                  defaultAssigneeId={task.assignedTo.id}
+                />
+                <DeleteTaskButton task={task} />
+              </div>
+            )}
           </li>
         );
       })}

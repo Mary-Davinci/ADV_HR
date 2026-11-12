@@ -121,6 +121,40 @@ export function createCandidateService(context: ServiceContext) {
   }
 
   return {
+    async findDuplicates(
+      input: Pick<CandidateIdentityInput, "firstName" | "lastName" | "email" | "phone" | "fiscalCode">,
+      excludeId?: EntityId,
+    ) {
+      assertCan(actor, "candidate.read");
+      return store.candidates.findDuplicates(input, excludeId);
+    },
+    async duplicatePairs() {
+      assertCan(actor, "candidate.read");
+      return store.candidates.duplicatePairs();
+    },
+    async mergedInto(id: EntityId) {
+      assertCan(actor, "candidate.read");
+      return store.candidates.mergedInto(id);
+    },
+    async merge(sourceId: EntityId, targetId: EntityId) {
+      assertCan(actor, "candidate.edit");
+      assertCan(actor, "application.manage");
+      assertCan(actor, "document.manage");
+      await store.transaction(async (repos) => {
+        await repos.candidates.merge(sourceId, targetId, actor.id);
+        await recordEvent(repos, actor, {
+          activity: {
+            entityType: "CANDIDATE",
+            entityId: targetId,
+            candidateId: targetId,
+            action: "UPDATED",
+            metadata: { section: "merge", sourceId },
+          },
+          audit: { entityType: "CANDIDATE", entityId: targetId, action: "UPDATE", changes: { mergedFrom: sourceId } },
+        });
+      });
+      return { id: targetId };
+    },
     async search(query: CandidateSearchQuery): Promise<Page<CandidateListItem>> {
       assertCan(actor, "candidate.read");
       return store.candidates.search(query);
@@ -143,10 +177,17 @@ export function createCandidateService(context: ServiceContext) {
         const found = await Promise.all(
           batch.map(async (option) => {
             const profile = await selectionSearchProfile(store, option.id);
-            if (!profile || profile.keywords.role.length === 0) return null;
+            if (
+              !profile ||
+              (profile.keywords.role.length === 0 &&
+                !profile.keywords.screening.functionPattern &&
+                !profile.keywords.screening.domainPattern)
+            )
+              return null;
             const { items } = await store.candidates.matchPosition({
               roleKeywords: profile.keywords.role,
               bonusKeywords: profile.keywords.bonus,
+              screening: profile.keywords.screening,
               selectionId: option.id,
               jobProvince: profile.jobProvince,
               candidateIds: [id],
@@ -246,12 +287,17 @@ export function createCandidateService(context: ServiceContext) {
       };
     },
 
-    async create(input: CandidateIdentityInput): Promise<{ id: EntityId }> {
+    async create(input: CandidateIdentityInput, allowDuplicate = false): Promise<{ id: EntityId }> {
       assertCan(actor, "candidate.create");
       if (input.fiscalCode && (await store.candidates.findByFiscalCode(input.fiscalCode))) {
         throw new ConflictError("Esiste già un candidato con questo codice fiscale.");
       }
       return store.transaction(async (repos) => {
+        const duplicates = await repos.candidates.findDuplicates(input);
+        if (duplicates.length && !allowDuplicate)
+          throw new ConflictError(
+            "Possibile duplicato: verifica le schede con lo stesso nome, telefono o email prima di proseguire.",
+          );
         const candidate = await repos.candidates.create(input);
         await recordEvent(repos, actor, {
           activity: {
